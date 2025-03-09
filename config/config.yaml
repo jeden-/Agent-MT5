@@ -1,0 +1,69 @@
+# Konfiguracja Trading Agent MT5
+
+# Ustawienia ogólne
+general:
+  app_name: "Trading Agent MT5"
+  version: "0.1.0"
+  log_level: "INFO"
+  timezone: "Europe/Warsaw"
+
+# Ustawienia handlowe
+trading:
+  symbols:
+    - "EURUSD"
+    - "GBPUSD"
+    - "USDJPY"
+    - "AUDUSD"
+    - "USDCHF"
+    - "USDCAD"
+  timeframes:
+    - "M5"
+    - "M15"
+    - "H1"
+    - "H4"
+    - "D1"
+  trading_hours:
+    start: "08:00"
+    end: "16:00"
+  min_confirmations: 3
+
+# Ustawienia zarządzania ryzykiem
+risk_management:
+  max_daily_loss_percent: 2.0
+  max_position_size_percent: 1.0
+  default_stop_loss_pips: 50
+  default_take_profit_pips: 100
+  max_open_positions: 5
+  max_positions_per_symbol: 2
+  trailing_stop:
+    enabled: true
+    activation_percent: 0.5
+    trailing_distance_pips: 20
+
+# Ustawienia AI
+ai:
+  models:
+    claude:
+      enabled: true
+      weight: 0.4
+      timeout_seconds: 30
+    grok:
+      enabled: true
+      weight: 0.3
+      timeout_seconds: 20
+    deepseek:
+      enabled: true
+      weight: 0.3
+      timeout_seconds: 15
+  threshold:
+    entry: 0.75
+    exit: 0.65
+
+# Ustawienia monitoringu
+monitoring:
+  status_update_interval_seconds: 60
+  performance_metrics_interval_minutes: 15
+  alert_channels:
+    email: true
+    telegram: false
+    sms: false 

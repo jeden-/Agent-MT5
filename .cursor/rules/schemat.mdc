@@ -1,0 +1,199 @@
+---
+description: Schemat blokowy Agenta
+globs: 
+alwaysApply: false
+---
+┌─────────────────────────────────┐
+│     Inicjalizacja Agenta MT5    │
+│    i połączenie z MetaTrader    │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│   Ocena globalnego stanu rynku  │
+│   (zmienność, trendy, korelacje)│◄───────────────────┐
+└───────────────┬─────────────────┘                    │
+                │                                      │
+                ▼                                      │
+┌─────────────────────────────────┐                    │
+│  Aktualizacja systemu wag dla   │                    │
+│    różnych typów strategii      │                    │
+└───────────────┬─────────────────┘                    │
+                │                                      │
+                ▼                                      │
+┌─────────────────────────────────┐                    │
+│   Równoległa analiza wszystkich │                    │
+│   instrumentów i timeframe'ów   │                    │
+└───────────────┬─────────────────┘                    │
+                │                                      │
+                ▼                                      │
+┌─────────────────────────────────┐                    │
+│ Identyfikacja potencjalnych     │                    │
+│ setupów (scalping/intraday/swing)│                   │
+└───────────────┬─────────────────┘                    │
+                │                                      │
+                ▼                                      │
+┌─────────────────────────────────┐                    │
+│ Ocena jakości setupów i filtracja│                   │
+│ (eliminacja szumu i konfliktów) │                    │
+└───────────────┬─────────────────┘                    │
+                │                                      │
+                ▼                                      │
+┌─────────────────────────────────┐                    │
+│  Czy zidentyfikowano setupy     │                    │
+│      o jakości ≥ próg?          │                    │
+└───────────────┬─────────────────┘                    │
+                │                                      │
+          ┌─────┴─────┐                                │
+          │           │                                │
+          │ TAK       │ NIE                            │
+          ▼           └─────────────────────────┐      │
+┌─────────────────────────────────┐             │      │
+│  Wybór najlepszego setupu       │             │      │
+│  (ranking i priorytetyzacja)    │             │      │
+└───────────────┬─────────────────┘             │      │
+                │                               │      │
+                ▼                               │      │
+┌─────────────────────────────────┐             │      │
+│ Weryfikacja zgodności z limitami│             │      │
+│ alokacji i zarządzaniem ryzykiem│             │      │
+└───────────────┬─────────────────┘             │      │
+                │                               │      │
+                ▼                               │      │
+┌─────────────────────────────────┐             │      │
+│  Czy setup jest akceptowalny    │             │      │
+│  w kontekście całego portfela?  │             │      │
+└───────────────┬─────────────────┘             │      │
+                │                               │      │
+          ┌─────┴─────┐                         │      │
+          │           │                         │      │
+          │ TAK       │ NIE                     │      │
+          ▼           └──────────┐              │      │
+┌─────────────────────────────────┐             │      │
+│ Obliczenie optymalnej wielkości │             │      │
+│ pozycji i parametrów zarządzania│             │      │
+└───────────────┬─────────────────┘             │      │
+                │                               │      │
+                ▼                               │      │
+┌─────────────────────────────────┐             │      │
+│ Czy poziom autonomii pozwala na │             │      │
+│ automatyczne wykonanie zlecenia?│             │      │
+└───────────────┬─────────────────┘             │      │
+                │                               │      │
+          ┌─────┴─────┐                         │      │
+          │           │                         │      │
+          │ TAK       │ NIE                     │      │
+          ▼           └───────────┐             │      │
+┌─────────────────────────────────┐             │      │
+│  Wykonanie zlecenia przez MT5   │             │      │
+└───────────────┬─────────────────┘             │      │
+                │                  ┌────────────┘      │
+                ▼                  │                   │
+┌─────────────────────────────────┐│                   │
+│ Inicjalizacja systemu zarządzani││                   │
+│ cyklem życia nowej pozycji      ││                   │
+└───────────────┬─────────────────┘│                   │
+                │                  │                   │
+                ▼                  ▼                   │
+┌─────────────────────────────────────────────────────┐│
+│              Zarządzanie otwartymi pozycjami        ││
+├─────────────────────────────────────────────────────┤│
+│ ┌─────────────────────────┐ ┌─────────────────────┐ ││
+│ │ Aktualizacja cyklu życia│ │ Analiza warunków do │ ││
+│ │ dla każdej pozycji      │ │ zamknięcia/modyfikac│ ││
+│ └──────────┬──────────────┘ └──────────┬──────────┘ ││
+│            │                           │            ││
+│            ▼                           ▼            ││
+│ ┌─────────────────────────┐ ┌─────────────────────┐ ││
+│ │ Wykonanie akcji dla     │ │ Modyfikacja SL/TP   │ ││
+│ │ bieżącego etapu pozycji │ │ lub zamknięcie pozyc│ ││
+│ └──────────┬──────────────┘ └──────────┬──────────┘ │|
+│            │                           │            ││
+│            └───────────────────────────┘            ││
+└───────────────────────────┬─────────────────────────┘│
+                            │                          │
+                            ▼                          │
+┌─────────────────────────────────────────────────────┐│
+│         Aktualizacja metryk wydajności              ││
+├─────────────────────────────────────────────────────┤│
+│ ┌─────────────────────────┐ ┌─────────────────────┐ ││
+│ │ Obliczenie wyników dla  │ │ Aktualizacja poziomó│ ││
+│ │ każdego typu strategii  │ │ autonomii i wag     │ ││
+│ └──────────┬──────────────┘ └──────────┬──────────┘ ││
+│            │                           │            ││
+│            └───────────────────────────┘            ││
+└───────────────────────────┬─────────────────────────┘│
+                            │                          │
+                            └──────────────────────────┘
+
+
+Szczegółowe omówienie kluczowych modułów schematu
+1. Inicjalizacja i ocena stanu rynku
+Inicjalizacja Agenta
+
+Uruchomienie agenta MT5
+Połączenie z terminalem MetaTrader
+Wczytanie konfiguracji i ustawień strategii
+Ocena globalnego stanu rynku
+
+Analiza zmienności rynku (VIX, ATR instrumentów)
+Identyfikacja dominujących trendów
+Analiza korelacji między instrumentami
+Ocena ogólnego sentymentu rynkowego
+2. System adaptacyjnej alokacji strategii
+Aktualizacja systemu wag
+
+Dostosowanie wag dla strategii (scalping, intraday, swing)
+Uwzględnienie historycznych wyników każdej strategii
+Implementacja limytów alokacji zapobiegających nadmiernemu skupieniu
+Dynamiczne dostosowanie do bieżących warunków rynkowych
+3. Identyfikacja i ocena setupów
+Równoległa analiza instrumentów
+
+Jednoczesna analiza Top 5 instrumentów
+Wieloczasowa analiza (od M1 do D1)
+Identyfikacja potencjalnych punktów wejścia
+Identyfikacja i filtracja setupów
+
+Zastosowanie kryteriów technicznych dla każdego typu strategii
+Ocena jakości setupu (0-10)
+Filtracja szumu i sygnałów konfliktowych
+Priorytetyzacja setupów z najwyższą jakością
+4. Zarządzanie ryzykiem i decyzje handlowe
+Weryfikacja limitów alokacji
+
+Sprawdzenie czy setup mieści się w limitach alokacji kapitału
+Weryfikacja ekspozycji na poszczególne klasy instrumentów
+Sprawdzenie korelacji z istniejącymi pozycjami
+Decyzja o wykonaniu zlecenia
+
+Sprawdzenie poziomu autonomii dla danego typu strategii
+W przypadku niskiej autonomii - oczekiwanie na potwierdzenie
+Przy wysokiej autonomii - automatyczne wykonanie
+5. Zarządzanie cyklem życia pozycji
+Inicjalizacja cyklu życia pozycji
+
+Definicja etapów cyklu życia (initial, breakeven, trailing, exit)
+Określenie warunków przejścia między etapami
+Ustawienie parametrów zarządzania dla każdego etapu
+Zarządzanie otwartymi pozycjami
+
+Ciągłe monitorowanie aktywnych pozycji
+Dostosowanie stop-lossów i take-profitów
+Dynamiczne zamykanie pozycji na podstawie zmiany warunków rynkowych
+6. System uczenia i optymalizacji
+Aktualizacja metryk wydajności
+
+Śledzenie wyników każdego typu strategii
+Ocena skuteczności na poszczególnych instrumentach
+Parametryzacja poziomu autonomii na podstawie wyników
+Zalety takiego podejścia:
+Adaptacyjność - agent dostosowuje się do zmiennych warunków rynkowych i własnych wyników
+
+Zarządzanie ryzykiem - wbudowane limity i ograniczenia zapobiegają nadmiernej koncentracji i ryzyku
+
+Progresywna autonomia - agent stopniowo zwiększa swoją autonomię w oparciu o wyniki
+
+Filtracja szumu - system eliminuje fałszywe sygnały i konflikty między setupami
+
+Zarządzanie cyklem życia - każda pozycja przechodzi przez określone etapy z dedykowanymi parametrami

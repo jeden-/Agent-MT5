@@ -1,0 +1,298 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Architektura systemu handlowego z wykorzystaniem EA MT5
+1. Schemat systemu
+graph TD
+    A[Python Trading Agent] --> B[MT5 Bridge]
+    B --> C[Custom EA na MT5]
+    A --> D[PostgreSQL]
+    C --> E[MT5 Trading System]
+    
+    %% Komunikacja dwukierunkowa
+    B <--> C
+    A <--> D
+    
+    %% Komponenty Agenta
+    A --> F[AI Models Manager]
+    A --> G[Strategy Manager]
+    A --> H[Risk Manager]
+    A --> I[Position Manager]
+    
+    %% Monitoring i Logging
+    A --> J[Monitor System]
+    J --> D
+    C --> J
+    
+    %% Trade Flow
+    G --> K[Trade Generator]
+    K --> H
+    H --> I
+    I --> B
+
+2. Komponenty systemu
+A. Expert Advisor (MQL5)
+// TradingBridge.mq5
+#property copyright "Trading Agent Bridge"
+#property version   "1.00"
+
+// Konfiguracja
+input int SOCKET_PORT = 5555;
+input string ALLOWED_IP = "127.0.0.1";
+
+// Struktury danych
+struct TradeRequest {
+    string action;      // OPEN, CLOSE, MODIFY
+    string symbol;
+    double volume;
+    string direction;   // BUY, SELL
+    double price;
+    double sl;
+    double tp;
+    int magic;
+    string comment;
+};
+
+// Główna klasa EA
+class TradingBridge {
+private:
+    int socket;
+    bool isConnected;
+    
+public:
+    bool Initialize() {
+        socket = SocketCreate();
+        if(socket != INVALID_HANDLE) {
+            if(SocketBind(socket, ALLOWED_IP, SOCKET_PORT)) {
+                isConnected = SocketListen(socket);
+                return isConnected;
+            }
+        }
+        return false;
+    }
+    
+    void ProcessRequests() {
+        if(!isConnected) return;
+        
+        string request = ReceiveRequest();
+        if(request != "") {
+            TradeRequest trade = ParseRequest(request);
+            ExecuteTrade(trade);
+        }
+    }
+    
+    void ExecuteTrade(TradeRequest &trade) {
+        MqlTradeRequest request = {};
+        MqlTradeResult result = {};
+        
+        // Przygotowanie zlecenia
+        request.action = trade.action == "OPEN" ? TRADE_ACTION_DEAL : TRADE_ACTION_CLOSE;
+        request.symbol = trade.symbol;
+        request.volume = trade.volume;
+        request.type = trade.direction == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+        request.price = trade.price;
+        request.sl = trade.sl;
+        request.tp = trade.tp;
+        request.magic = trade.magic;
+        request.comment = trade.comment;
+        
+        // Wykonanie zlecenia
+        bool success = OrderSend(request, result);
+        
+        // Wysłanie odpowiedzi
+        SendResponse(success, result);
+    }
+};
+
+B. Python Bridge
+class MT5Bridge:
+    def __init__(self, config):
+        self.config = config
+        self.socket = None
+        self.ea_magic = config.get('ea_magic', 123456)
+        self.initialize_connection()
+        
+    def initialize_connection(self):
+        """Inicjalizacja połączenia z EA"""
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect(('localhost', self.config['ea_port']))
+        
+    async def execute_trade(self, trade_params: dict) -> dict:
+        """Wykonanie zlecenia przez EA"""
+        try:
+            request = self._prepare_trade_request(trade_params)
+            await self._send_request(request)
+            response = await self._receive_response()
+            
+            return self._process_response(response)
+            
+        except Exception as e:
+            logger.error(f"Trade execution error: {str(e)}")
+            return {"success": False, "error": str(e)}
+            
+    def _prepare_trade_request(self, params: dict) -> dict:
+        """Przygotowanie requestu do EA"""
+        return {
+            "action": params["action"],
+            "symbol": params["symbol"],
+            "volume": params["volume"],
+            "direction": params["direction"],
+            "price": params["price"],
+            "sl": params["sl"],
+            "tp": params["tp"],
+            "magic": self.ea_magic,
+            "comment": f"Agent_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        }
+
+C. Position Manager
+class PositionManager:
+    def __init__(self, bridge: MT5Bridge, db_manager: DatabaseManager):
+        self.bridge = bridge
+        self.db = db_manager
+        self.risk_manager = RiskManager()
+        
+    async def open_position(self, setup: dict) -> dict:
+        """Otwieranie nowej pozycji"""
+        try:
+            # Walidacja ryzyka
+            if not await self.risk_manager.validate_setup(setup):
+                return {"success": False, "error": "Risk validation failed"}
+                
+            # Przygotowanie parametrów
+            trade_params = self._prepare_trade_params(setup)
+            
+            # Wykonanie przez EA
+            result = await self.bridge.execute_trade(trade_params)
+            
+            if result["success"]:
+                # Zapisz do bazy
+                await self.db.save_position(result)
+                
+            return result
+            
+        except Exception as e:
+            logger.error(f"Position opening error: {str(e)}")
+            return {"success": False, "error": str(e)}
+            
+    async def close_position(self, position_id: int) -> dict:
+        """Zamykanie pozycji"""
+        try:
+            position = await self.db.get_position(position_id)
+            
+            close_params = {
+                "action": "CLOSE",
+                "position_id": position_id,
+                "symbol": position["symbol"],
+                "volume": position["volume"]
+            }
+            
+            result = await self.bridge.execute_trade(close_params)
+            
+            if result["success"]:
+                await self.db.update_position_status(
+                    position_id,
+                    "closed",
+                    result
+                )
+                
+            return result
+            
+        except Exception as e:
+            logger.error(f"Position closing error: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+
+D. Monitor System
+class TradingMonitor:
+    def __init__(self, bridge: MT5Bridge, db_manager: DatabaseManager):
+        self.bridge = bridge
+        self.db = db_manager
+        
+    async def start_monitoring(self):
+        """Uruchomienie monitorowania"""
+        while True:
+            try:
+                # Pobierz aktywne pozycje
+                positions = await self.bridge.get_active_positions()
+                
+                # Aktualizuj stan w bazie
+                await self._update_positions_state(positions)
+                
+                # Sprawdź warunki zamknięcia
+                await self._check_closing_conditions(positions)
+                
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"Monitoring error: {str(e)}")
+                await asyncio.sleep(5)
+                
+    async def _update_positions_state(self, positions: list):
+        """Aktualizacja stanu pozycji w bazie"""
+        for position in positions:
+            await self.db.update_position_state(
+                position["ticket"],
+                {
+                    "current_price": position["price"],
+                    "profit": position["profit"],
+                    "swap": position["swap"]
+                }
+            )
+
+3. Kolejność implementacji
+Faza 1: Podstawowa infrastruktura
+
+Implementacja EA z podstawową funkcjonalnością
+System komunikacji Python-EA
+Podstawowa struktura bazy danych
+Faza 2: System zarządzania pozycjami
+
+Rozbudowa funkcjonalności EA
+Manager pozycji w Pythonie
+System monitorowania
+Faza 3: Integracja z modelami AI
+
+Podłączenie modeli AI
+System generowania sygnałów
+Zarządzanie ryzykiem
+Faza 4: Optymalizacja i monitoring
+
+System raportowania
+Optymalizacja wykonania
+Rozbudowa monitoringu
+4. Przykładowy flow wykonania zlecenia
+sequenceDiagram
+    participant A as Trading Agent
+    participant B as Position Manager
+    participant C as MT5 Bridge
+    participant D as Expert Advisor
+    participant E as Database
+
+    A->>B: Execute Setup
+    B->>B: Validate Setup
+    B->>C: Send Trade Request
+    C->>D: Execute Trade
+    D->>C: Trade Result
+    C->>B: Execution Status
+    B->>E: Save Position
+    B->>A: Return Result
+
+5. Kluczowe aspekty
+Bezpieczeństwo
+
+Walidacja wszystkich requestów
+System recovery
+Monitoring błędów
+Wydajność
+
+Asynchroniczne operacje
+Optymalizacja komunikacji
+Efektywne zarządzanie pamięcią
+Skalowalność
+
+Modułowa architektura
+Możliwość rozbudowy
+Łatwa integracja nowych funkcji
+To rozwiązanie eliminuje potrzebę GUI automation, wykorzystując natywne możliwości MT5, co zapewnia większą niezawodność i szybkość działania systemu.

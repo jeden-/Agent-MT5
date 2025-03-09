@@ -1,0 +1,359 @@
+---
+description: Interfejs
+globs: 
+alwaysApply: false
+---
+
+Specyfikacja interfejsu monitorującego dla agenta MT5
+1. Struktura interfejsu
+graph TD
+    A[Trading Agent Monitor] --> B[Live Monitor]
+    A --> C[Performance Dashboard]
+    A --> D[AI Analytics]
+    A --> E[System Status]
+    
+    B --> B1[Active Positions]
+    B --> B2[Recent Setups]
+    B --> B3[Live Equity Chart]
+    B --> B4[Quick Actions]
+    
+    C --> C1[Trading Metrics]
+    C --> C2[Strategy Performance]
+    C --> C3[Risk Analytics]
+    C --> C4[Historical Results]
+    
+    D --> D1[Models Status]
+    D --> D2[AI Decisions Log]
+    D --> D3[Model Performance]
+    D --> D4[API Usage]
+    
+    E --> E1[Component Status]
+    E --> E2[System Logs]
+    E --> E3[Resource Usage]
+    E --> E4[Error Reports]
+
+2. Szczegółowy opis zakładek
+2.1 Live Monitor
+class LiveMonitorTab:
+    layout = {
+        "title": "Live Trading Monitor",
+        "refresh_rate": 5,  # seconds
+        "components": {
+            "active_positions": {
+                "type": "table",
+                "columns": [
+                    "Instrument", "Direction", "Entry", "Current",
+                    "P/L", "Duration", "Strategy", "Risk"
+                ],
+                "update_freq": "real-time"
+            },
+            "equity_chart": {
+                "type": "line_chart",
+                "metrics": ["Balance", "Equity", "Floating P/L"],
+                "timeframes": ["1H", "4H", "1D", "1W"],
+                "update_freq": "1min"
+            },
+            "recent_setups": {
+                "type": "scrolling_table",
+                "max_items": 10,
+                "columns": [
+                    "Time", "Instrument", "Type", "Quality",
+                    "Status", "AI Score"
+                ]
+            },
+            "quick_actions": {
+                "type": "button_panel",
+                "actions": [
+                    "Close All", "Cancel Pending",
+                    "Emergency Stop", "Reset AI"
+                ]
+            }
+        }
+    }
+
+
+2.2 Performance Dashboard
+class PerformanceTab:
+    layout = {
+        "title": "Trading Performance",
+        "refresh_rate": 60,  # seconds
+        "components": {
+            "key_metrics": {
+                "type": "metric_cards",
+                "metrics": [
+                    {"name": "Win Rate", "format": "percentage"},
+                    {"name": "Profit Factor", "format": "decimal"},
+                    {"name": "Avg Win", "format": "currency"},
+                    {"name": "Avg Loss", "format": "currency"},
+                    {"name": "Sharpe Ratio", "format": "decimal"},
+                    {"name": "Max Drawdown", "format": "percentage"}
+                ]
+            },
+            "strategy_breakdown": {
+                "type": "bar_chart",
+                "categories": ["Scalping", "Intraday", "Swing"],
+                "metrics": ["Win Rate", "Profit", "Count"]
+            },
+            "instrument_performance": {
+                "type": "heat_map",
+                "instruments": ["XAUUSD", "GBPUSD", "NASDAQ", 
+                              "EURUSD", "XAGUSD"],
+                "metrics": ["Return", "Win Rate", "Volume"]
+            }
+        }
+    }
+
+2.3 AI Analytics
+class AIAnalyticsTab:
+    layout = {
+        "title": "AI System Analytics",
+        "refresh_rate": 30,  # seconds
+        "components": {
+            "model_status": {
+                "type": "status_panel",
+                "models": {
+                    "Claude": ["Status", "Response Time", "Queue"],
+                    "Grok": ["Status", "Response Time", "Queue"],
+                    "DeepSeek": ["Status", "Response Time", "Queue"]
+                }
+            },
+            "decision_log": {
+                "type": "log_viewer",
+                "columns": [
+                    "Time", "Model", "Decision", "Confidence",
+                    "Result", "Execution Time"
+                ],
+                "max_items": 100
+            },
+            "performance_metrics": {
+                "type": "metric_grid",
+                "metrics": {
+                    "Accuracy": ["1H", "4H", "1D"],
+                    "Response Time": ["Min", "Avg", "Max"],
+                    "Cost Efficiency": ["Per Trade", "Per Day"]
+                }
+            }
+        }
+    }
+
+2.4 System Status
+class SystemStatusTab:
+    layout = {
+        "title": "System Health Monitor",
+        "refresh_rate": 15,  # seconds
+        "components": {
+            "component_status": {
+                "type": "status_grid",
+                "components": [
+                    "MT5 Connection", "Database", "AI Models",
+                    "API Services", "Trading Engine"
+                ]
+            },
+            "system_resources": {
+                "type": "resource_monitor",
+                "metrics": ["CPU", "Memory", "Disk", "Network"]
+            },
+            "error_log": {
+                "type": "log_table",
+                "levels": ["ERROR", "WARNING", "INFO"],
+                "max_items": 50
+            }
+        }
+    }
+
+
+3. Kluczowe funkcjonalności
+3.1 Real-time Monitoring
+class RealTimeMonitor:
+    def __init__(self):
+        self.websocket = WebSocketClient()
+        self.update_queue = Queue()
+        
+    async def start_monitoring(self):
+        """Uruchamia monitoring w czasie rzeczywistym"""
+        tasks = [
+            self.monitor_positions(),
+            self.monitor_equity(),
+            self.monitor_ai_system(),
+            self.monitor_system_health()
+        ]
+        await asyncio.gather(*tasks)
+        
+    async def monitor_positions(self):
+        """Monitoruje aktywne pozycje"""
+        while True:
+            positions = await self.get_active_positions()
+            self.update_queue.put({
+                "type": "positions_update",
+                "data": positions
+            })
+            await asyncio.sleep(1)
+
+3.2 Interactive Controls
+class ControlPanel:
+    def __init__(self):
+        self.trading_engine = TradingEngine()
+        self.risk_manager = RiskManager()
+        
+    def create_controls(self):
+        """Tworzy panel kontrolny"""
+        return {
+            "emergency_stop": st.button(
+                "Emergency Stop",
+                on_click=self.emergency_stop
+            ),
+            "risk_settings": st.slider(
+                "Risk per Trade",
+                min_value=0.1,
+                max_value=2.0,
+                value=1.0,
+                step=0.1
+            ),
+            "strategy_toggles": st.multiselect(
+                "Active Strategies",
+                options=["Scalping", "Intraday", "Swing"]
+            )
+        }
+
+3.3 Data Visualization
+class DataVisualizer:
+    def create_equity_chart(self, data):
+        """Tworzy wykres equity"""
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=data['timestamp'],
+            y=data['equity'],
+            name='Equity',
+            line=dict(color='blue')
+        ))
+        fig.add_trace(go.Scatter(
+            x=data['timestamp'],
+            y=data['balance'],
+            name='Balance',
+            line=dict(color='green')
+        ))
+        return fig
+        
+    def create_performance_heatmap(self, data):
+        """Tworzy heatmapę wydajności"""
+        fig = go.Figure(data=go.Heatmap(
+            z=data['values'],
+            x=data['instruments'],
+            y=data['metrics'],
+            colorscale='RdYlGn'
+        ))
+        return fig
+
+
+4. Interfejs użytkownika
+Style i układ
+st.set_page_config(
+    page_title="Trading Agent Monitor",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .stMetric {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .tradingChart {
+        height: 400px;
+        margin: 20px 0;
+    }
+    .statusIndicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+    .status-ok { background-color: #00ff00; }
+    .status-warning { background-color: #ffff00; }
+    .status-error { background-color: #ff0000; }
+    </style>
+    """, unsafe_allow_html=True)
+
+Responsywność
+def create_responsive_layout():
+    """Tworzy responsywny układ"""
+    if st.session_state.get('window_width', 0) < 768:
+        # Mobile layout
+        return create_mobile_layout()
+    else:
+        # Desktop layout
+        return create_desktop_layout()
+        
+def create_mobile_layout():
+    """Tworzy układ dla urządzeń mobilnych"""
+    st.write("Mobile view")
+    # Simplified layout for mobile
+    
+def create_desktop_layout():
+    """Tworzy układ dla desktopów"""
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        create_main_panel()
+    with col2:
+        create_sidebar_panel()
+
+5. Aktualizacja danych
+Mechanizm odświeżania
+class DataUpdater:
+    def __init__(self):
+        self.last_update = {}
+        self.update_frequencies = {
+            "positions": 1,    # seconds
+            "equity": 5,       # seconds
+            "performance": 60,  # seconds
+            "system": 15       # seconds
+        }
+        
+    async def start_updates(self):
+        """Uruchamia cykliczne aktualizacje"""
+        while True:
+            current_time = time.time()
+            
+            # Update positions
+            if (current_time - self.last_update.get("positions", 0) 
+                >= self.update_frequencies["positions"]):
+                await self.update_positions()
+                self.last_update["positions"] = current_time
+                
+            # Update equity
+            if (current_time - self.last_update.get("equity", 0) 
+                >= self.update_frequencies["equity"]):
+                await self.update_equity()
+                self.last_update["equity"] = current_time
+                
+            await asyncio.sleep(0.1)
+
+6. Rekomendowana kolejność implementacji:
+Faza 1: Podstawowy monitoring
+
+Live Monitor z podstawowymi metrykami
+System Status z podstawowym monitoringiem
+Prosty system odświeżania danych
+Faza 2: Rozszerzony monitoring
+
+Performance Dashboard
+Rozszerzone wykresy i analizy
+Interaktywne kontrolki
+Faza 3: AI Analytics
+
+Monitoring modeli AI
+Logi decyzji
+Metryki wydajności AI
+Faza 4: Zaawansowane funkcje
+
+Pełna responsywność
+Zaawansowane wizualizacje
+System alertów
+Taki interfejs zapewni pełną widoczność działania systemu przy zachowaniu prostoty obsługi i efektywności monitorowania.
+
+

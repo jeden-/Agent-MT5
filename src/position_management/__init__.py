@@ -1,0 +1,3 @@
+"""
+Moduł zarządzania pozycjami handlowymi
+""" 

@@ -1,0 +1,42 @@
+---
+description: Potencjalne zagrożenia i problemy
+globs: 
+alwaysApply: false
+---
+Kluczowe rekomendacje
+
+Wprowadzenie systemu retryów
+
+Automatyczne ponowne próby dla failujących operacji
+Exponential backoff
+Limity prób
+Rozbudowa systemu monitoringu
+
+Monitoring latencji
+Śledzenie success rate
+Alerty o problemach
+Implementacja transakcyjności
+
+Atomic operations
+Rollback capability
+Stan recovery
+Dodanie warstwy cachowania
+
+Cache dla często używanych danych
+Buforowanie requestów
+Optymalizacja wydajności
+
+
+graph TD
+    A[Python Trading Agent] -->|Socket Communication| B[MT5 EA]
+    B -->|Trade Execution| C[MT5 Terminal]
+    
+    %% Potencjalne problemy
+    A -->|1. Lost Connection| B
+    B -->|2. Execution Delay| C
+    C -->|3. State Sync Issues| A
+    
+    %% Recovery paths
+    A -->|Recovery| D[Connection Manager]
+    D -->|Reconnect| B
+    B -->|State Check| C

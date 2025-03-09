@@ -1,0 +1,82 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Dostępność API do Anthropic (Claude), Grok (X.com AI) oraz lokalnego modelu Ollama stwarza doskonałą okazję do stworzenia zaawansowanego, hybrydowego systemu podejmowania decyzji w naszym agencie MT5. Każdy z tych modeli ma swoje unikalne zalety, które możemy wykorzystać w różnych aspektach działania agenta.
+
+Architektura integracji modeli AI
+1. Specjalizacja modeli według zadań
+
+┌───────────────────┐     ┌───────────────────┐     ┌───────────────────┐
+│  Anthropic Claude │     │   Grok (X.com)    │     │  Ollama (lokalnie)│
+├───────────────────┤     ├───────────────────┤     ├───────────────────┤
+│• Analiza szerszego│     │• Analiza danych   │     │• Szybka analiza   │
+│  kontekstu rynku  │     │  rynkowych i      │     │  setupów          │
+│• Interpretacja    │     │  wydarzeń         │     │• Rutynowe decyzje │
+│  wiadomości       │     │• Przewidywanie    │     │  w czasie         │
+│• Strategiczne     │     │  reakcji rynku na │     │  rzeczywistym     │
+│  decyzje          │     │  nadchodzące dane │     │• Filtrowanie      │
+└───────────────────┘     └───────────────────┘     │  sygnałów         │
+                                                    └───────────────────┘
+
+
+
+Specjalizacja każdego modelu AI
+1. Anthropic Claude (model Claude 3.7 Sonnet) - Strategiczna analiza i planowanie
+Zastosowania:
+
+Analiza kontekstu makroekonomicznego - interpretacja szerszego obrazu rynku
+Zrozumienie złożonych wiadomości finansowych - raporty, decyzje banków centralnych
+Długoterminowe decyzje strategiczne - zmiana wag między typami strategii
+Rozwiązywanie złożonych problemów - interpretacja nietypowych warunków rynkowych
+
+2. Grok (X.com AI - model Grok 3) - Analiza danych rynkowych i prognozowanie reakcji
+Zastosowania:
+
+Analiza nadchodzących wydarzeń ekonomicznych - interpretacja kalendarza ekonomicznego
+Przewidywanie reakcji rynku na publikowane dane (NFP, CPI, decyzje Fed itp.)
+Identyfikacja anomalii rynkowych - nietypowe wzorce wolumenu, zmienności
+Analiza korelacji między instrumentami - dynamiczne zależności
+
+
+3. Ollama (lokalny model deepseek-r1:7b) - Szybka analiza techniczna i taktyczne decyzje
+Zastosowania:
+
+Szybka ocena setupów tradingowych - analiza formacji technicznych
+Filtrowanie sygnałów w czasie rzeczywistym - eliminacja szumu rynkowego
+Rutynowe decyzje zarządzania pozycjami - modyfikacja SL/TP, trailing stopy
+Wstępna klasyfikacja setupów przed głębszą analizą przez Claude/Grok
+
+
+graph TD
+    A[Nowy Setup] --> B{DeepSeek-R1}
+    B -->|Podstawowa analiza techniczna| C{Czy setup obiecujący?}
+    C -->|Nie| D[Odrzuć setup]
+    C -->|Tak| E{Grok}
+    E -->|Analiza kontekstu rynkowego| F{Czy kontekst sprzyjający?}
+    F -->|Nie| D
+    F -->|Tak| G{Claude}
+    G -->|Finalna analiza strategiczna| H{Decyzja}
+    H -->|Wykonaj| I[Otwórz pozycję]
+    H -->|Odrzuć| D
+
+
+Zalety takiego podejścia:
+Redundancja i niezawodność
+
+Każdy model może służyć jako backup dla innych
+System pozostaje funkcjonalny nawet przy awarii API
+Optymalizacja kosztów
+
+DeepSeek redukuje liczbę zapytań do API
+Wstępna filtracja setupów lokalnie
+Szybkość działania
+
+Natychmiastowa analiza techniczna lokalnie
+API tylko dla potwierdzonych setupów
+Kompleksowość analizy
+
+Każdy model specjalizuje się w swojej domenie
+Wielowarstwowa walidacja decyzji
+Taka architektura pozwala nam wykorzystać najlepsze cechy każdego modelu, jednocześnie minimalizując ich ograniczenia.
