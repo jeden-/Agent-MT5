@@ -19,13 +19,12 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Moduły aplikacji
-# Importy będą odkomentowane w miarę implementacji poszczególnych modułów
-# from src.mt5_bridge import MT5Bridge
 from src.database import DatabaseManager
-# from src.ai_models import AIModelManager
-# from src.risk_management import RiskManager
-# from src.position_management import PositionManager
-# from src.monitoring import MonitoringService
+from src.mt5_bridge import TradingService
+from src.position_management import PositionManager
+from src.risk_management import RiskManager
+from src.analysis import SignalGenerator, SignalValidator, FeedbackLoop
+from src.trading_integration import TradingIntegration
 from src.utils import setup_logging
 
 def load_config():
@@ -53,12 +52,12 @@ class TradingAgent:
         self.logger = setup_logging()
         self.logger.info("Inicjalizacja Trading Agent MT5")
         
-        # Inicjalizacja komponentów
-        # Komponenty będą inicjalizowane w miarę implementacji poszczególnych modułów
-        self.logger.info("Komponenty będą inicjalizowane po implementacji")
-        
         # Status agenta
         self.is_running = False
+        
+        # Komponenty
+        self.db_manager = None
+        self.trading_integration = None
     
     def initialize_components(self):
         """Inicjalizacja wszystkich komponentów systemu."""
@@ -78,7 +77,10 @@ class TradingAgent:
             self.logger.error(f"Błąd podczas weryfikacji struktury bazy danych: {e}", exc_info=True)
             raise
         
-        # Pozostałe komponenty będą inicjalizowane w miarę implementacji
+        # Inicjalizacja integracji handlowej
+        self.logger.info("Inicjalizacja integracji handlowej...")
+        self.trading_integration = TradingIntegration()
+        
         self.logger.info("Inicjalizacja komponentów zakończona")
     
     def start(self):
@@ -89,42 +91,49 @@ class TradingAgent:
             self.initialize_components()
             self.is_running = True
             
-            self.logger.info("Trading Agent MT5 uruchomiony")
+            # Uruchomienie integracji handlowej
+            if not self.trading_integration.start():
+                self.logger.error("Nie udało się uruchomić integracji handlowej")
+                raise RuntimeError("Błąd uruchamiania integracji handlowej")
+            
+            # Włączenie/wyłączenie automatycznego handlu na podstawie konfiguracji
+            auto_trading_enabled = self.config.get('auto_trading_enabled', False)
+            self.trading_integration.enable_trading(auto_trading_enabled)
+            
+            self.logger.info(f"Trading Agent MT5 uruchomiony (auto-trading: {'włączony' if auto_trading_enabled else 'wyłączony'})")
             
             # Główna pętla aplikacji
             while self.is_running:
-                # Implementacja głównej pętli zostanie dodana później
-                self.logger.debug("Agent działa...")
-                time.sleep(10)  # Tymczasowo, do zastąpienia właściwą logiką
+                time.sleep(1)  # Czekamy na przerwanie przez użytkownika
                 
         except KeyboardInterrupt:
-            self.logger.info("Zatrzymanie na żądanie użytkownika")
+            self.logger.info("Otrzymano sygnał przerwania, zatrzymywanie agenta...")
             self.stop()
         except Exception as e:
             self.logger.error(f"Błąd podczas działania agenta: {e}", exc_info=True)
             self.stop()
+            raise
     
     def stop(self):
         """Zatrzymanie agenta."""
         self.logger.info("Zatrzymywanie Trading Agent MT5...")
-        self.is_running = False
         
-        # Zamknięcie połączenia z bazą danych
-        if hasattr(self, 'db_manager'):
-            self.logger.info("Zamykanie połączenia z bazą danych...")
-            try:
-                self.db_manager.close()
-                self.logger.info("Połączenie z bazą danych zamknięte")
-            except Exception as e:
-                self.logger.error(f"Błąd podczas zamykania połączenia z bazą danych: {e}", exc_info=True)
-        
-        # Pozostały kod zamykania połączeń i zasobów zostanie dodany w miarę implementacji
-        self.logger.info("Trading Agent MT5 zatrzymany")
+        try:
+            # Zatrzymanie integracji handlowej
+            if self.trading_integration:
+                self.trading_integration.stop()
+            
+            # Zamknięcie połączenia z bazą danych
+            if self.db_manager:
+                self.db_manager.disconnect()
+            
+            self.is_running = False
+            self.logger.info("Trading Agent MT5 zatrzymany")
+            
+        except Exception as e:
+            self.logger.error(f"Błąd podczas zatrzymywania agenta: {e}", exc_info=True)
 
-def main():
-    """Główna funkcja aplikacji."""
-    agent = TradingAgent()
-    agent.start()
 
 if __name__ == "__main__":
-    main() 
+    agent = TradingAgent()
+    agent.start() 

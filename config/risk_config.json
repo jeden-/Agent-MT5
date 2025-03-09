@@ -1,0 +1,82 @@
+{
+    "max_positions_per_symbol": 3,
+    "max_positions_total": 10,
+    "max_daily_loss_percent": 2.0,
+    "max_position_size_percent": 5.0,
+    "min_risk_reward_ratio": 1.5,
+    "default_stop_loss_pips": 30,
+    "trailing_stop_activation_pips": 20,
+    "max_exposure_percent": 20.0,
+    "max_exposure_per_symbol_percent": 10.0,
+    "max_correlated_symbols_exposure_percent": 15.0,
+    "auto_hedging_enabled": false,
+    "debug_mode": false,
+    "risk_level_rules": {
+        "critical": {
+            "actions": ["close_new_positions", "reduce_exposure"]
+        },
+        "high": {
+            "actions": ["validate_strictly"]
+        },
+        "medium": {
+            "actions": ["normal_validation"]
+        },
+        "low": {
+            "actions": ["relaxed_validation"]
+        }
+    },
+    "symbol_configs": {
+        "EURUSD": {
+            "max_positions": 5,
+            "max_exposure_percent": 12.0,
+            "min_risk_reward_ratio": 1.2
+        },
+        "GBPUSD": {
+            "max_positions": 4,
+            "max_exposure_percent": 10.0,
+            "min_risk_reward_ratio": 1.3
+        },
+        "USDJPY": {
+            "max_positions": 3,
+            "max_exposure_percent": 8.0,
+            "min_risk_reward_ratio": 1.4
+        },
+        "default": {
+            "max_positions": 3,
+            "max_exposure_percent": 8.0,
+            "min_risk_reward_ratio": 1.5
+        }
+    },
+    "position_size_rules": {
+        "fixed_risk_percent": 1.0,
+        "adjust_for_volatility": true,
+        "min_position_size": 0.01,
+        "max_position_size": 10.0
+    },
+    "stop_loss_rules": {
+        "use_atr_multiplier": true,
+        "atr_period": 14,
+        "atr_multiplier": 2.0,
+        "min_stop_distance_pips": 10,
+        "max_stop_distance_pips": 100
+    },
+    "trailing_stop_rules": {
+        "activation_percent": 0.5,
+        "step_percent": 0.2,
+        "lock_profit_percent": 0.3
+    },
+    "session_risk_limits": {
+        "asian": {
+            "max_positions_total": 8,
+            "max_position_size_percent": 4.0
+        },
+        "european": {
+            "max_positions_total": 10,
+            "max_position_size_percent": 5.0
+        },
+        "american": {
+            "max_positions_total": 12,
+            "max_position_size_percent": 5.5
+        }
+    }
+} 

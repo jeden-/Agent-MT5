@@ -1,0 +1,1 @@
+# Testy integracyjne dla Trading Agent MT5 
