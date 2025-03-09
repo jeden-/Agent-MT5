@@ -93,6 +93,12 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
                 self.handle_market_data(data)
             elif self.path == '/account_info':
                 self.handle_account_info(data)
+            elif self.path == '/position/open':
+                self.handle_open_position(data)
+            elif self.path == '/position/close':
+                self.handle_close_position(data)
+            elif self.path == '/position/modify':
+                self.handle_modify_position(data)
             else:
                 self.send_response(404)
                 self.send_header('Content-Type', 'application/json')
@@ -324,6 +330,146 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps({'status': 'ok', 'message': f'Account info for {account_id} updated'}).encode())
+
+    def handle_modify_position(self, data):
+        """Obsługa modyfikacji pozycji."""
+        required_fields = ['ea_id', 'ticket']
+        if not all(field in data for field in required_fields):
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'error', 
+                'message': f'Missing required fields. Required: {required_fields}'
+            }).encode())
+            return
+        
+        # Przygotowanie polecenia modyfikacji pozycji
+        command = {
+            'action': 'MODIFY_POSITION',
+            'ticket': data['ticket'],
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Dodanie opcjonalnych parametrów
+        if 'sl' in data:
+            command['sl'] = data['sl']
+        if 'tp' in data:
+            command['tp'] = data['tp']
+        
+        # Dodanie polecenia do kolejki dla danego EA
+        ea_id = data['ea_id']
+        with commands_lock:
+            if ea_id not in command_queue:
+                command_queue[ea_id] = []
+            command_queue[ea_id].append(command)
+        
+        # Logowanie operacji
+        logger.info(f"Dodano polecenie modyfikacji pozycji #{data['ticket']} dla EA {ea_id}")
+        
+        # Odpowiedź do klienta
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'message': 'Position modification command added to queue'
+        }).encode())
+
+    def handle_open_position(self, data):
+        """Obsługa otwierania nowej pozycji."""
+        required_fields = ['ea_id', 'symbol', 'order_type', 'volume']
+        if not all(field in data for field in required_fields):
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'error', 
+                'message': f'Missing required fields. Required: {required_fields}'
+            }).encode())
+            return
+        
+        # Przygotowanie polecenia otwarcia pozycji
+        command = {
+            'action': 'OPEN_POSITION',
+            'symbol': data['symbol'],
+            'type': data['order_type'],
+            'volume': data['volume'],
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Dodanie opcjonalnych parametrów
+        if 'price' in data:
+            command['price'] = data['price']
+        if 'sl' in data:
+            command['sl'] = data['sl']
+        if 'tp' in data:
+            command['tp'] = data['tp']
+        if 'comment' in data:
+            command['comment'] = data['comment']
+        
+        # Dodanie polecenia do kolejki dla danego EA
+        ea_id = data['ea_id']
+        with commands_lock:
+            if ea_id not in command_queue:
+                command_queue[ea_id] = []
+            command_queue[ea_id].append(command)
+        
+        # Logowanie operacji
+        logger.info(f"Dodano polecenie otwarcia pozycji {data['symbol']} {data['order_type']} {data['volume']} dla EA {ea_id}")
+        
+        # Odpowiedź do klienta
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'message': 'Position open command added to queue'
+        }).encode())
+
+    def handle_close_position(self, data):
+        """Obsługa zamykania pozycji."""
+        required_fields = ['ea_id', 'ticket']
+        if not all(field in data for field in required_fields):
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'error', 
+                'message': f'Missing required fields. Required: {required_fields}'
+            }).encode())
+            return
+        
+        # Przygotowanie polecenia zamknięcia pozycji
+        command = {
+            'action': 'CLOSE_POSITION',
+            'ticket': data['ticket'],
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Dodanie opcjonalnego parametru volume dla częściowego zamknięcia
+        if 'volume' in data:
+            command['volume'] = data['volume']
+        
+        # Dodanie polecenia do kolejki dla danego EA
+        ea_id = data['ea_id']
+        with commands_lock:
+            if ea_id not in command_queue:
+                command_queue[ea_id] = []
+            command_queue[ea_id].append(command)
+        
+        # Logowanie operacji
+        volume_info = f" (volume={data['volume']})" if 'volume' in data else ""
+        logger.info(f"Dodano polecenie zamknięcia pozycji #{data['ticket']}{volume_info} dla EA {ea_id}")
+        
+        # Odpowiedź do klienta
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'message': 'Position close command added to queue'
+        }).encode())
 
 def status_printer():
     """Funkcja wypisująca status serwera co minutę."""

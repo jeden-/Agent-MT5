@@ -36,9 +36,9 @@ Etap 1: Core Infrastructure
 Etap 2: Basic Operations
 [ ] Trading: Podstawowe operacje handlowe
 
-[ ] Otwieranie pozycji
-[ ] Zamykanie pozycji
-[ ] Modyfikacja zleceń
+[x] Otwieranie pozycji
+[x] Zamykanie pozycji
+[x] Modyfikacja zleceń
 [ ] Pobieranie stanu konta
 [ ] Monitoring: System monitorowania
 

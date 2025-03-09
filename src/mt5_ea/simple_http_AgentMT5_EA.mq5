@@ -322,63 +322,74 @@ void CheckForCommands()
 //+------------------------------------------------------------------+
 void ProcessCommand(string commandJson)
 {
-   // Proste parsowanie JSON dla poleceń
-   string commandType = ExtractJsonString(commandJson, "command");
-   string commandId = ExtractJsonString(commandJson, "id");
+   // Parsowanie JSON dla poleceń
+   string action = ExtractJsonString(commandJson, "action");
    
-   Print("Simple_HTTP_AgentMT5_EA: Przetwarzanie polecenia: ", commandType, ", ID: ", commandId);
+   Print("Simple_HTTP_AgentMT5_EA: Przetwarzanie polecenia: ", action);
    
-   if (commandType == "PING")
+   if (action == "PING")
    {
       // To jest prosty ping-pong, odpowiadamy PONGiem
       PingServer();
    }
-   else if (commandType == "OPEN_POSITION")
+   else if (action == "OPEN_POSITION")
    {
       // Otwieranie pozycji
-      string dataObject = ExtractJsonObject(commandJson, "data");
-      if (dataObject != "")
-      {
-         string symbol = ExtractJsonString(dataObject, "symbol");
-         string typeStr = ExtractJsonString(dataObject, "type");
-         double volume = ExtractJsonDouble(dataObject, "volume");
-         double price = ExtractJsonDouble(dataObject, "price");
-         double sl = ExtractJsonDouble(dataObject, "sl");
-         double tp = ExtractJsonDouble(dataObject, "tp");
-         
-         HandleOpenPosition(symbol, typeStr, volume, price, sl, tp);
-      }
+      string symbol = ExtractJsonString(commandJson, "symbol");
+      string typeStr = ExtractJsonString(commandJson, "type");
+      double volume = ExtractJsonDouble(commandJson, "volume");
+      double price = 0;
+      double sl = 0;
+      double tp = 0;
+      string comment = "";
+      
+      // Pobranie opcjonalnych parametrów
+      if (StringFind(commandJson, "\"price\"") >= 0)
+         price = ExtractJsonDouble(commandJson, "price");
+      if (StringFind(commandJson, "\"sl\"") >= 0)
+         sl = ExtractJsonDouble(commandJson, "sl");
+      if (StringFind(commandJson, "\"tp\"") >= 0)
+         tp = ExtractJsonDouble(commandJson, "tp");
+      if (StringFind(commandJson, "\"comment\"") >= 0)
+         comment = ExtractJsonString(commandJson, "comment");
+      
+      HandleOpenPosition(symbol, typeStr, volume, price, sl, tp, comment);
    }
-   else if (commandType == "CLOSE_POSITION")
+   else if (action == "CLOSE_POSITION")
    {
       // Zamykanie pozycji
-      string dataObject = ExtractJsonObject(commandJson, "data");
-      if (dataObject != "")
-      {
-         long ticket = ExtractJsonLong(dataObject, "ticket");
-         HandleClosePosition(ticket);
-      }
+      long ticket = ExtractJsonLong(commandJson, "ticket");
+      double volume = 0;
+      
+      // Pobranie opcjonalnego parametru volume dla częściowego zamknięcia
+      if (StringFind(commandJson, "\"volume\"") >= 0)
+         volume = ExtractJsonDouble(commandJson, "volume");
+      
+      HandleClosePosition(ticket, volume);
    }
-   else if (commandType == "MODIFY_POSITION")
+   else if (action == "MODIFY_POSITION")
    {
       // Modyfikacja pozycji
-      string dataObject = ExtractJsonObject(commandJson, "data");
-      if (dataObject != "")
-      {
-         long ticket = ExtractJsonLong(dataObject, "ticket");
-         double sl = ExtractJsonDouble(dataObject, "sl");
-         double tp = ExtractJsonDouble(dataObject, "tp");
-         HandleModifyPosition(ticket, sl, tp);
-      }
+      long ticket = ExtractJsonLong(commandJson, "ticket");
+      double sl = 0;
+      double tp = 0;
+      
+      // Pobranie opcjonalnych parametrów
+      if (StringFind(commandJson, "\"sl\"") >= 0)
+         sl = ExtractJsonDouble(commandJson, "sl");
+      if (StringFind(commandJson, "\"tp\"") >= 0)
+         tp = ExtractJsonDouble(commandJson, "tp");
+      
+      HandleModifyPosition(ticket, sl, tp);
    }
-   else if (commandType == "GET_ACCOUNT_INFO")
+   else if (action == "GET_ACCOUNT_INFO")
    {
       // Wysyłanie informacji o koncie
       SendAccountInfo();
    }
    else
    {
-      Print("Simple_HTTP_AgentMT5_EA: Nieznane polecenie: ", commandType);
+      Print("Simple_HTTP_AgentMT5_EA: Nieznane polecenie: ", action);
    }
 }
 
@@ -597,18 +608,12 @@ void SendAccountInfo()
 }
 
 //+------------------------------------------------------------------+
-//| Handle open position command                                    |
+//| Handle open position                                            |
 //+------------------------------------------------------------------+
-void HandleOpenPosition(string symbol, string typeStr, double volume, double price, double sl, double tp)
+void HandleOpenPosition(string symbol, string typeStr, double volume, double price = 0, double sl = 0, double tp = 0, string comment = "")
 {
-   // Weryfikacja danych
-   if (symbol == "" || typeStr == "" || volume <= 0)
-   {
-      Print("Simple_HTTP_AgentMT5_EA: Nieprawidłowe dane dla otwarcia pozycji");
-      return;
-   }
+   Print("Simple_HTTP_AgentMT5_EA: Próba otwarcia pozycji ", symbol, " ", typeStr, " ", volume);
    
-   // Określamy typ zlecenia
    ENUM_ORDER_TYPE orderType;
    if (typeStr == "BUY")
       orderType = ORDER_TYPE_BUY;
@@ -620,187 +625,249 @@ void HandleOpenPosition(string symbol, string typeStr, double volume, double pri
       return;
    }
    
-   // Pobieramy aktualną cenę, jeśli nie jest podana
+   // Struktury do przechowywania danych zlecenia i wyniku
+   MqlTradeRequest request;
+   MqlTradeResult result;
+   
+   // Przygotowanie zapytania
+   ZeroMemory(request);
+   ZeroMemory(result);
+   
+   request.action = TRADE_ACTION_DEAL;
+   request.symbol = symbol;
+   request.volume = volume;
+   request.type = orderType;
+   
+   // Jeśli cena nie jest określona, używamy bieżącej ceny rynkowej
    if (price <= 0)
    {
       MqlTick tick;
       if (SymbolInfoTick(symbol, tick))
       {
          if (orderType == ORDER_TYPE_BUY)
-            price = tick.ask;
+            request.price = tick.ask;
          else
-            price = tick.bid;
+            request.price = tick.bid;
       }
       else
       {
-         Print("Simple_HTTP_AgentMT5_EA: Nie można pobrać danych ticku dla symbolu ", symbol);
+         Print("Simple_HTTP_AgentMT5_EA: Nie można uzyskać danych tick dla ", symbol);
          return;
       }
    }
-   
-   // Otwieramy pozycję
-   Trade.SetExpertMagicNumber(EA_MAGIC);
-   if (!Trade.PositionOpen(symbol, orderType, volume, price, sl, tp, "Simple_HTTP_AgentMT5_EA"))
+   else
    {
-      Print("Simple_HTTP_AgentMT5_EA: Błąd otwarcia pozycji: ", GetLastError());
-      return;
+      request.price = price;
    }
    
-   Print("Simple_HTTP_AgentMT5_EA: Pozycja otwarta pomyślnie. Ticket: ", Trade.ResultOrder());
+   // Dodanie SL i TP
+   if (sl > 0)
+      request.sl = sl;
+   if (tp > 0)
+      request.tp = tp;
+   
+   // Dodanie komentarza
+   if (comment != "")
+      request.comment = comment;
+   
+   // Dodatkowe parametry zlecenia
+   request.deviation = 5;  // Dopuszczalne odchylenie ceny w punktach
+   request.type_filling = ORDER_FILLING_FOK;  // Wykonaj całość lub anuluj
+   
+   // Wysłanie zlecenia
+   bool success = OrderSend(request, result);
+   
+   // Obsługa wyniku
+   if (success && result.retcode == TRADE_RETCODE_DONE)
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Pozycja otwarta pomyślnie. Ticket: ", result.order);
+   }
+   else
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Błąd podczas otwierania pozycji. Kod: ", result.retcode, ", Opis: ", GetErrorDescription(result.retcode));
+   }
 }
 
 //+------------------------------------------------------------------+
-//| Handle close position command                                   |
+//| Handle close position                                           |
 //+------------------------------------------------------------------+
-void HandleClosePosition(long ticket)
+void HandleClosePosition(long ticket, double volume = 0)
 {
-   // Weryfikacja danych
-   if (ticket <= 0)
-   {
-      Print("Simple_HTTP_AgentMT5_EA: Nieprawidłowy ticket dla zamknięcia pozycji");
-      return;
-   }
+   Print("Simple_HTTP_AgentMT5_EA: Próba zamknięcia pozycji #", ticket);
    
-   // Wybieramy pozycję
+   // Sprawdzenie czy pozycja istnieje
    if (!PositionSelectByTicket(ticket))
    {
-      Print("Simple_HTTP_AgentMT5_EA: Nie można znaleźć pozycji z ticketem: ", ticket);
+      Print("Simple_HTTP_AgentMT5_EA: Pozycja #", ticket, " nie istnieje");
       return;
    }
    
-   // Zamykamy pozycję
-   Trade.SetExpertMagicNumber(EA_MAGIC);
-   if (!Trade.PositionClose(ticket))
+   // Struktury do przechowywania danych zlecenia i wyniku
+   MqlTradeRequest request;
+   MqlTradeResult result;
+   
+   // Przygotowanie zapytania
+   ZeroMemory(request);
+   ZeroMemory(result);
+   
+   request.action = TRADE_ACTION_DEAL;
+   request.position = ticket;
+   
+   // Pobieranie danych o pozycji
+   string symbol = PositionGetString(POSITION_SYMBOL);
+   double posVolume = PositionGetDouble(POSITION_VOLUME);
+   ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   
+   request.symbol = symbol;
+   
+   // Jeśli podano volume, zamykamy częściowo
+   if (volume > 0 && volume < posVolume)
+      request.volume = volume;
+   else
+      request.volume = posVolume;
+   
+   // Jeśli pozycja jest BUY, to zamykamy jako SELL i odwrotnie
+   if (posType == POSITION_TYPE_BUY)
+      request.type = ORDER_TYPE_SELL;
+   else
+      request.type = ORDER_TYPE_BUY;
+   
+   // Pobieranie bieżącej ceny
+   MqlTick tick;
+   if (SymbolInfoTick(symbol, tick))
    {
-      Print("Simple_HTTP_AgentMT5_EA: Błąd zamknięcia pozycji: ", GetLastError());
+      if (posType == POSITION_TYPE_BUY)
+         request.price = tick.bid;
+      else
+         request.price = tick.ask;
+   }
+   else
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Nie można uzyskać danych tick dla ", symbol);
       return;
    }
    
-   Print("Simple_HTTP_AgentMT5_EA: Pozycja zamknięta pomyślnie. Ticket: ", ticket);
+   // Dodatkowe parametry zlecenia
+   request.deviation = 5;  // Dopuszczalne odchylenie ceny w punktach
+   request.type_filling = ORDER_FILLING_FOK;  // Wykonaj całość lub anuluj
+   
+   // Wysłanie zlecenia
+   bool success = OrderSend(request, result);
+   
+   // Obsługa wyniku
+   if (success && result.retcode == TRADE_RETCODE_DONE)
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Pozycja zamknięta pomyślnie. Ticket: ", result.order);
+   }
+   else
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Błąd podczas zamykania pozycji. Kod: ", result.retcode, ", Opis: ", GetErrorDescription(result.retcode));
+   }
 }
 
 //+------------------------------------------------------------------+
-//| Handle modify position command                                  |
+//| Handle modify position                                          |
 //+------------------------------------------------------------------+
 void HandleModifyPosition(long ticket, double sl, double tp)
 {
-   // Weryfikacja danych
-   if (ticket <= 0)
-   {
-      Print("Simple_HTTP_AgentMT5_EA: Nieprawidłowy ticket dla modyfikacji pozycji");
-      return;
-   }
+   Print("Simple_HTTP_AgentMT5_EA: Próba modyfikacji pozycji #", ticket, " SL=", sl, " TP=", tp);
    
-   // Wybieramy pozycję
+   // Sprawdzenie czy pozycja istnieje
    if (!PositionSelectByTicket(ticket))
    {
-      Print("Simple_HTTP_AgentMT5_EA: Nie można znaleźć pozycji z ticketem: ", ticket);
+      Print("Simple_HTTP_AgentMT5_EA: Pozycja #", ticket, " nie istnieje");
       return;
    }
    
-   // Modyfikujemy pozycję
-   Trade.SetExpertMagicNumber(EA_MAGIC);
-   if (!Trade.PositionModify(ticket, sl, tp))
+   // Sprawdzenie czy SL lub TP są różne od obecnych
+   double currentSL = PositionGetDouble(POSITION_SL);
+   double currentTP = PositionGetDouble(POSITION_TP);
+   
+   if ((sl <= 0 || MathAbs(sl - currentSL) < 0.00001) && 
+       (tp <= 0 || MathAbs(tp - currentTP) < 0.00001))
    {
-      Print("Simple_HTTP_AgentMT5_EA: Błąd modyfikacji pozycji: ", GetLastError());
+      Print("Simple_HTTP_AgentMT5_EA: Modyfikacja nie jest potrzebna, wartości SL i TP są takie same");
       return;
    }
    
-   Print("Simple_HTTP_AgentMT5_EA: Pozycja zmodyfikowana pomyślnie. Ticket: ", ticket);
+   // Struktury do przechowywania danych zlecenia i wyniku
+   MqlTradeRequest request;
+   MqlTradeResult result;
+   
+   // Przygotowanie zapytania
+   ZeroMemory(request);
+   ZeroMemory(result);
+   
+   request.action = TRADE_ACTION_SLTP;
+   request.symbol = PositionGetString(POSITION_SYMBOL);
+   request.position = ticket;
+   
+   // Ustawienie nowych wartości SL i TP
+   if (sl > 0)
+      request.sl = sl;
+   else
+      request.sl = currentSL;  // Zachowanie obecnego SL
+   
+   if (tp > 0)
+      request.tp = tp;
+   else
+      request.tp = currentTP;  // Zachowanie obecnego TP
+   
+   // Wysłanie zlecenia
+   bool success = OrderSend(request, result);
+   
+   // Obsługa wyniku
+   if (success && result.retcode == TRADE_RETCODE_DONE)
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Pozycja zmodyfikowana pomyślnie");
+   }
+   else
+   {
+      Print("Simple_HTTP_AgentMT5_EA: Błąd podczas modyfikacji pozycji. Kod: ", result.retcode, ", Opis: ", GetErrorDescription(result.retcode));
+   }
 }
 
 //+------------------------------------------------------------------+
-//| Trade function                                                   |
+//| Get error description                                           |
 //+------------------------------------------------------------------+
-void OnTrade()
+string GetErrorDescription(int errorCode)
 {
-   // Przy każdej zmianie w handlu, aktualizujemy pozycje
-   SendPositionsUpdate();
-}
-
-//+------------------------------------------------------------------+
-//| Pomocnicze funkcje do parsowania JSON                           |
-//+------------------------------------------------------------------+
-
-// Funkcja pomocnicza do wyciągania wartości string z JSON
-string ExtractJsonString(string json, string key)
-{
-   string keyPattern = "\"" + key + "\":\"";
-   int pos = StringFind(json, keyPattern);
-   if (pos >= 0)
+   switch(errorCode)
    {
-      int startPos = pos + StringLen(keyPattern);
-      int endPos = StringFind(json, "\"", startPos);
-      if (endPos >= 0)
-      {
-         return StringSubstr(json, startPos, endPos - startPos);
-      }
+      case TRADE_RETCODE_REQUOTE: return "Requote";
+      case TRADE_RETCODE_REJECT: return "Request rejected";
+      case TRADE_RETCODE_CANCEL: return "Request canceled";
+      case TRADE_RETCODE_PLACED: return "Order placed";
+      case TRADE_RETCODE_DONE: return "Request completed";
+      case TRADE_RETCODE_DONE_PARTIAL: return "Request completed partially";
+      case TRADE_RETCODE_ERROR: return "Request processing error";
+      case TRADE_RETCODE_TIMEOUT: return "Request canceled by timeout";
+      case TRADE_RETCODE_INVALID: return "Invalid request";
+      case TRADE_RETCODE_INVALID_VOLUME: return "Invalid volume";
+      case TRADE_RETCODE_INVALID_PRICE: return "Invalid price";
+      case TRADE_RETCODE_INVALID_STOPS: return "Invalid stops";
+      case TRADE_RETCODE_TRADE_DISABLED: return "Trade is disabled";
+      case TRADE_RETCODE_MARKET_CLOSED: return "Market is closed";
+      case TRADE_RETCODE_NO_MONEY: return "Not enough money";
+      case TRADE_RETCODE_PRICE_CHANGED: return "Price changed";
+      case TRADE_RETCODE_PRICE_OFF: return "No quotes";
+      case TRADE_RETCODE_INVALID_EXPIRATION: return "Invalid expiration";
+      case TRADE_RETCODE_ORDER_CHANGED: return "Order changed";
+      case TRADE_RETCODE_TOO_MANY_REQUESTS: return "Too many requests";
+      case TRADE_RETCODE_NO_CHANGES: return "No changes in request";
+      case TRADE_RETCODE_SERVER_DISABLES_AT: return "Autotrading disabled by server";
+      case TRADE_RETCODE_CLIENT_DISABLES_AT: return "Autotrading disabled by client";
+      case TRADE_RETCODE_LOCKED: return "Request locked";
+      case TRADE_RETCODE_FROZEN: return "Order or position frozen";
+      case TRADE_RETCODE_INVALID_FILL: return "Invalid order filling type";
+      case TRADE_RETCODE_CONNECTION: return "No connection";
+      case TRADE_RETCODE_ONLY_REAL: return "Operation available only for real accounts";
+      case TRADE_RETCODE_LIMIT_ORDERS: return "Limit of pending orders reached";
+      case TRADE_RETCODE_LIMIT_VOLUME: return "Limit of volume for this symbol reached";
+      case TRADE_RETCODE_INVALID_ORDER: return "Invalid or prohibited order type";
+      case TRADE_RETCODE_POSITION_CLOSED: return "Position already closed";
+      default: return StringFormat("Unknown error %d", errorCode);
    }
-   return "";
-}
-
-// Funkcja pomocnicza do wyciągania wartości numerycznej z JSON
-double ExtractJsonDouble(string json, string key)
-{
-   string keyPattern = "\"" + key + "\":";
-   int pos = StringFind(json, keyPattern);
-   if (pos >= 0)
-   {
-      int startPos = pos + StringLen(keyPattern);
-      int endPos = StringFind(json, ",", startPos);
-      if (endPos < 0) endPos = StringFind(json, "}", startPos);
-      if (endPos >= 0)
-      {
-         string numStr = StringSubstr(json, startPos, endPos - startPos);
-         return StringToDouble(numStr);
-      }
-   }
-   return 0.0;
-}
-
-// Funkcja pomocnicza do wyciągania liczby całkowitej z JSON
-long ExtractJsonLong(string json, string key)
-{
-   string keyPattern = "\"" + key + "\":";
-   int pos = StringFind(json, keyPattern);
-   if (pos >= 0)
-   {
-      int startPos = pos + StringLen(keyPattern);
-      int endPos = StringFind(json, ",", startPos);
-      if (endPos < 0) endPos = StringFind(json, "}", startPos);
-      if (endPos >= 0)
-      {
-         string numStr = StringSubstr(json, startPos, endPos - startPos);
-         return StringToInteger(numStr);
-      }
-   }
-   return 0;
-}
-
-// Funkcja pomocnicza do wyciągania obiektu JSON z innego JSON
-string ExtractJsonObject(string json, string key)
-{
-   string keyPattern = "\"" + key + "\":{";
-   int pos = StringFind(json, keyPattern);
-   if (pos >= 0)
-   {
-      int startPos = pos + StringLen(keyPattern) - 1; // -1 żeby zachować początkowy nawias "{"
-      int braceCount = 1;
-      int endPos = startPos + 1;
-      
-      while (endPos < StringLen(json) && braceCount > 0)
-      {
-         if (StringGetCharacter(json, endPos) == '{') braceCount++;
-         else if (StringGetCharacter(json, endPos) == '}') braceCount--;
-         endPos++;
-      }
-      
-      if (braceCount == 0)
-      {
-         return StringSubstr(json, startPos, endPos - startPos);
-      }
-   }
-   return "";
 }
 
 //+------------------------------------------------------------------+ 
