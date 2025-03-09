@@ -1,50 +1,70 @@
 # AgentMT5 - Interfejs Użytkownika
 
-Interfejs użytkownika do monitorowania i zarządzania systemem handlowym AgentMT5.
+Ten katalog zawiera interfejs użytkownika dla systemu AgentMT5, zbudowany przy użyciu Streamlit.
 
 ## Funkcje
 
-- **Live Monitor** - monitorowanie aktywnych pozycji, wykresu equity i ostatnich operacji
-- **Performance Dashboard** - analiza wyników handlowych, wydajności instrumentów i strategii
-- **AI Analytics** - monitorowanie modeli AI, decyzji i kosztów operacyjnych
-- **System Status** - monitorowanie stanu systemu, alertów i statystyk
+- **Live Monitor**: Monitoring aktywnych połączeń i transakcji w czasie rzeczywistym
+- **Performance Dashboard**: Analiza wyników handlowych
+- **AI Analytics**: Analityka związana z modelami AI
+- **System Status**: Monitorowanie ogólnego stanu systemu
+
+## Lokalizacja
+
+- Interfejs używa polskiego formatu dla:
+  - Walut: "10 500,00 zł" (spacja jako separator tysięcy, przecinek jako separator dziesiętny, symbol "zł")
+  - Dat: "DD.MM.YYYY HH:MM:SS"
+  - Procentów: "10,5%" (przecinek jako separator dziesiętny)
 
 ## Wymagania
 
-- Python 3.8+
-- Streamlit i inne zależności z pliku `requirements.txt`
-- Działający serwer HTTP AgentMT5
-
-## Instalacja
-
-```bash
-# Instalacja zależności
-pip install -r requirements.txt
+```
+streamlit==1.27.0
+plotly==5.17.0
+pandas==2.1.0
+numpy==1.25.2
+requests==2.31.0
 ```
 
 ## Uruchomienie
 
-1. Upewnij się, że serwer HTTP AgentMT5 jest uruchomiony:
-   ```bash
-   python scripts/http_mt5_server.py --host 127.0.0.1 --port 5555
-   ```
+```bash
+# Zainstaluj wymagane pakiety
+pip install -r requirements.txt
 
-2. Uruchom aplikację Streamlit:
-   ```bash
-   cd src/ui
-   streamlit run app.py
-   ```
+# Uruchom aplikację Streamlit
+cd src/ui
+streamlit run app.py
+```
 
-3. Aplikacja będzie dostępna w przeglądarce pod adresem: [http://localhost:8501](http://localhost:8501)
+## Dostęp
+
+Po uruchomieniu, interfejs będzie dostępny pod adresem:
+- http://localhost:8501
 
 ## Konfiguracja
 
-Podstawowe ustawienia można skonfigurować w panelu bocznym aplikacji:
-- URL serwera AgentMT5
-- Interwał odświeżania danych
+Główne ustawienia aplikacji znajdują się w zmiennych na początku pliku `app.py`:
 
-## Uwagi
+```python
+# Stałe
+SERVER_URL = "http://127.0.0.1:5555"  # Adres serwera HTTP MT5
+REFRESH_INTERVAL = 5  # Interwał odświeżania w sekundach
+CURRENCY = "zł"  # Waluta używana w systemie
+```
 
-- Automatyczne odświeżanie jest domyślnie włączone z 5-sekundowym interwałem
-- Dane są pobierane z serwera HTTP AgentMT5 w czasie rzeczywistym
-- W przypadku braku połączenia z serwerem, wyświetlane są przykładowe dane 
+## Autoodświeżanie
+
+Interfejs obsługuje automatyczne odświeżanie danych z ustalonym interwałem. Można to włączyć/wyłączyć za pomocą opcji w panelu bocznym.
+
+## Rozwój
+
+Aby dodać nowe funkcje:
+
+1. Zdefiniuj nową funkcję renderującą w pliku `app.py`
+2. Dodaj nową opcję w menu w funkcji `main()`
+3. Aktualizuj API zgodnie z potrzebami
+
+## Dostosowanie wyglądu
+
+Styl interfejsu można dostosować za pomocą CSS w zmiennej `st.markdown()` na początku pliku. 

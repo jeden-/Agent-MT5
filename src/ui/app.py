@@ -16,6 +16,18 @@ import requests
 from datetime import datetime, timedelta
 import sys
 import os
+import locale
+
+# Ustawienie lokalizacji polskiej do formatowania wartości
+try:
+    locale.setlocale(locale.LC_ALL, 'pl_PL.UTF-8')
+except:
+    # Jeśli polska lokalizacja nie jest dostępna, spróbujmy ogólną
+    try:
+        locale.setlocale(locale.LC_ALL, 'pl_PL')
+    except:
+        # Jeśli także to nie zadziała, pozostajemy przy domyślnej
+        pass
 
 # Dodanie ścieżki nadrzędnej, aby zaimportować moduły
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
@@ -35,6 +47,35 @@ st.set_page_config(
 # Stałe
 SERVER_URL = "http://127.0.0.1:5555"
 REFRESH_INTERVAL = 5  # sekundy
+CURRENCY = "zł"  # Waluta używana w systemie
+
+# Funkcje pomocnicze do formatowania
+def format_currency(value):
+    """Formatuje wartość jako kwotę w PLN w formacie polskim."""
+    if value is None:
+        return "0,00 zł"
+    return f"{value:,.2f}".replace(",", " ").replace(".", ",") + f" {CURRENCY}"
+
+def format_percentage(value):
+    """Formatuje wartość jako procent w formacie polskim."""
+    if value is None:
+        return "0,00%"
+    return f"{value:,.2f}%".replace(",", " ").replace(".", ",")
+
+def format_date(dt):
+    """Formatuje datę w polskim formacie."""
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except:
+            try:
+                dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+            except:
+                return dt
+    
+    if isinstance(dt, datetime):
+        return dt.strftime("%d.%m.%Y %H:%M:%S")
+    return str(dt)
 
 # Custom CSS
 st.markdown("""
@@ -48,47 +89,26 @@ st.markdown("""
         height: 400px;
         margin: 20px 0;
     }
-    .statusIndicator {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 5px;
+    .currency-value {
+        font-weight: bold;
+        color: #0e5484;
     }
-    .status-ok { background-color: #00ff00; }
-    .status-warning { background-color: #ffff00; }
-    .status-error { background-color: #ff0000; }
-    .status-critical { background-color: #990000; }
-    
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
+    .positive-value {
+        color: green;
     }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 4px 4px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #4CAF50;
-        color: white;
+    .negative-value {
+        color: red;
     }
 </style>
 """, unsafe_allow_html=True)
 
 def api_request(endpoint, method="GET", params=None, data=None):
-    """Wykonuje zapytanie do API serwera MT5."""
-    url = f"{SERVER_URL}/{endpoint}"
+    """Wykonuje żądanie do API serwera."""
     try:
         if method == "GET":
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(f"{SERVER_URL}/{endpoint}", params=params, timeout=5)
         else:
-            response = requests.post(url, json=data, timeout=5)
+            response = requests.post(f"{SERVER_URL}/{endpoint}", json=data, timeout=5)
         
         if response.status_code == 200:
             return response.json()
@@ -96,117 +116,111 @@ def api_request(endpoint, method="GET", params=None, data=None):
             st.error(f"Błąd API: {response.status_code} - {response.text}")
             return None
     except Exception as e:
-        st.error(f"Błąd połączenia z serwerem: {e}")
+        st.error(f"Błąd komunikacji z serwerem: {e}")
         return None
 
 def render_status_indicator(status):
-    """Renderuje kolorowy wskaźnik statusu."""
-    if status == "ok":
-        color_class = "status-ok"
-    elif status == "warning":
-        color_class = "status-warning"
-    elif status == "error":
-        color_class = "status-error"
-    elif status == "critical":
-        color_class = "status-critical"
-    else:
-        color_class = ""
-    
-    return f'<span class="statusIndicator {color_class}"></span>{status.upper()}'
+    """Renderuje wskaźnik statusu jako HTML."""
+    colors = {
+        "ok": "green",
+        "warning": "orange",
+        "error": "red",
+        "critical": "darkred",
+        "unknown": "gray"
+    }
+    color = colors.get(status.lower(), "gray")
+    return f'<span style="color: {color}; font-weight: bold;">{status.upper()}</span>'
 
 def render_live_monitor():
     """Renderuje zakładkę Live Monitor."""
-    st.header("Live Trading Monitor")
+    st.header("Monitor Trading Live")
     
-    # Podział na dwie kolumny
-    col1, col2 = st.columns([2, 1])
+    # Pobierz aktywne połączenia
+    connections_data = api_request("monitoring/connections")
     
-    with col1:
-        # Wykres equity
-        st.subheader("Equity Chart")
-        
-        # Przykładowe dane do wykresu
-        # W rzeczywistości będziemy pobierać te dane z API
-        dates = pd.date_range(start=datetime.now() - timedelta(days=7), end=datetime.now(), freq='D')
-        equity = [10000 + i*100 + np.random.randint(-50, 50) for i in range(len(dates))]
-        balance = [10000 + i*80 for i in range(len(dates))]
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=dates, y=equity, name='Equity', line=dict(color='blue')
-        ))
-        fig.add_trace(go.Scatter(
-            x=dates, y=balance, name='Balance', line=dict(color='green')
-        ))
-        
-        fig.update_layout(
-            height=400,
-            margin=dict(l=0, r=0, t=0, b=0),
-            legend=dict(orientation="h", y=1.02),
-            xaxis_title="Data",
-            yaxis_title="Wartość ($)"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True, className="tradingChart")
-        
-        # Aktywne pozycje
-        st.subheader("Aktywne Pozycje")
-        
-        # Przykładowe dane dla aktywnych pozycji
-        positions_data = {
-            "Instrument": ["EURUSD", "GOLD", "NASDAQ"],
-            "Kierunek": ["BUY", "SELL", "BUY"],
-            "Wolumen": [0.1, 0.05, 0.2],
-            "Cena Wejścia": [1.0892, 2156.45, 17845.30],
-            "Cena Aktualna": [1.0901, 2152.80, 17880.25],
-            "P/L": [9.00, 18.25, 70.00],
-            "Czas Trwania": ["2h 15m", "1d 4h", "45m"]
+    if not connections_data:
+        # Przykładowe dane jeśli nie można pobrać z API
+        connections_data = {
+            "connections": [
+                {
+                    "ea_id": "EA_1741521231",
+                    "last_ping": datetime.now().isoformat(),
+                    "status": "active",
+                    "symbol": "EURUSD",
+                    "positions": 2,
+                    "account_balance": 10500,
+                    "account_equity": 10650,
+                    "profit": 150
+                }
+            ]
         }
-        
-        positions_df = pd.DataFrame(positions_data)
-        st.dataframe(positions_df, use_container_width=True)
-        
-    with col2:
-        # Metryki konta
-        st.subheader("Statystyki Konta")
-        
-        metric_col1, metric_col2 = st.columns(2)
-        
-        with metric_col1:
-            st.metric(label="Balance", value="$10,580.00")
-            st.metric(label="Open P/L", value="$97.25", delta="+0.92%")
-            st.metric(label="Otwarte Pozycje", value="3")
-        
-        with metric_col2:
-            st.metric(label="Equity", value="$10,677.25")
-            st.metric(label="Dzisiejszy Wynik", value="$52.75", delta="+0.5%")
-            st.metric(label="Zlecenia Oczekujące", value="1")
-        
-        # Ostatnie operacje
-        st.subheader("Ostatnie Operacje")
-        
-        operations_data = {
-            "Czas": ["12:30:15", "11:45:22", "10:15:08", "09:30:45"],
-            "Typ": ["Otwarcie", "Zamknięcie", "Modyfikacja", "Otwarcie"],
-            "Instrument": ["EURUSD", "GOLD", "NASDAQ", "GBPUSD"],
-            "Status": ["Sukces", "Sukces", "Sukces", "Odrzucone"]
-        }
-        
-        operations_df = pd.DataFrame(operations_data)
-        st.dataframe(operations_df, use_container_width=True)
-        
-        # Szybkie akcje
-        st.subheader("Szybkie Akcje")
-        
-        button_col1, button_col2 = st.columns(2)
-        
-        with button_col1:
-            st.button("Zamknij Wszystkie", use_container_width=True)
-            st.button("Reset AI", use_container_width=True)
-        
-        with button_col2:
-            st.button("Anuluj Oczekujące", use_container_width=True)
-            st.button("STOP Emergency", type="primary", use_container_width=True)
+    
+    # Aktywne połączenia
+    st.subheader("Aktywne Połączenia EA")
+    
+    connections = connections_data.get("connections", [])
+    if connections:
+        for connection in connections:
+            col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+            
+            col1.metric(
+                label=f"EA ID: {connection.get('ea_id')}",
+                value=connection.get('symbol', 'N/A')
+            )
+            
+            last_ping = connection.get('last_ping')
+            if last_ping:
+                last_ping = format_date(last_ping)
+            col2.metric(
+                label="Ostatnia Aktywność",
+                value=last_ping
+            )
+            
+            profit = connection.get('profit', 0)
+            profit_delta = None
+            profit_text = format_currency(profit)
+            
+            col3.metric(
+                label="Bieżący Zysk",
+                value=profit_text,
+                delta=profit_delta
+            )
+            
+            positions = connection.get('positions', 0)
+            col4.metric(
+                label="Aktywne Pozycje",
+                value=positions
+            )
+            
+            st.markdown("---")
+    else:
+        st.info("Brak aktywnych połączeń EA")
+    
+    # Ostatnie transakcje
+    st.subheader("Ostatnie Transakcje")
+    
+    # Przykładowe dane dla ostatnich transakcji
+    transactions = [
+        {"id": 1, "symbol": "EURUSD", "type": "BUY", "open_time": "2025-03-09 10:15:32", 
+         "close_time": "2025-03-09 11:30:45", "profit": 45.80, "status": "CLOSED"},
+        {"id": 2, "symbol": "GOLD", "type": "SELL", "open_time": "2025-03-09 09:45:18", 
+         "close_time": None, "profit": -12.35, "status": "OPEN"},
+        {"id": 3, "symbol": "USDJPY", "type": "BUY", "open_time": "2025-03-09 08:30:21", 
+         "close_time": "2025-03-09 10:05:39", "profit": 33.25, "status": "CLOSED"},
+    ]
+    
+    transactions_df = pd.DataFrame(transactions)
+    
+    # Formatowanie kolumn z datami i profitem
+    transactions_df['open_time'] = transactions_df['open_time'].apply(format_date)
+    transactions_df['close_time'] = transactions_df['close_time'].apply(
+        lambda x: format_date(x) if x else "Aktywna"
+    )
+    
+    # Formatowanie profitu w walucie PLN
+    transactions_df['profit'] = transactions_df['profit'].apply(format_currency)
+    
+    st.dataframe(transactions_df, use_container_width=True)
 
 def render_performance_dashboard():
     """Renderuje zakładkę Performance Dashboard."""
@@ -217,12 +231,12 @@ def render_performance_dashboard():
     
     metrics_cols = st.columns(6)
     
-    metrics_cols[0].metric(label="Win Rate", value="62.5%")
-    metrics_cols[1].metric(label="Profit Factor", value="2.15")
-    metrics_cols[2].metric(label="Avg Win", value="$45.80")
-    metrics_cols[3].metric(label="Avg Loss", value="$21.35")
-    metrics_cols[4].metric(label="Sharpe Ratio", value="1.65")
-    metrics_cols[5].metric(label="Max DD", value="5.2%")
+    metrics_cols[0].metric(label="Win Rate", value="62,5%")
+    metrics_cols[1].metric(label="Profit Factor", value="2,15")
+    metrics_cols[2].metric(label="Średni Zysk", value=format_currency(45.80))
+    metrics_cols[3].metric(label="Średnia Strata", value=format_currency(21.35))
+    metrics_cols[4].metric(label="Sharpe Ratio", value="1,65")
+    metrics_cols[5].metric(label="Max DD", value="5,2%")
     
     # Podział na dwie kolumny
     col1, col2 = st.columns(2)
@@ -249,7 +263,7 @@ def render_performance_dashboard():
             margin=dict(l=0, r=0, t=0, b=0),
             legend=dict(orientation="h", y=1.02),
             xaxis_title="Data",
-            yaxis_title="P/L ($)"
+            yaxis_title=f"P/L ({CURRENCY})"
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -258,138 +272,201 @@ def render_performance_dashboard():
         # Analiza instrumentów
         st.subheader("Wydajność Instrumentów")
         
-        instruments_data = {
-            "Instrument": ["EURUSD", "GBPUSD", "GOLD", "SILVER", "NASDAQ"],
-            "Liczba Transakcji": [25, 18, 30, 12, 8],
-            "Win Rate": ["68%", "55%", "73%", "50%", "62%"],
-            "Zysk Netto": ["$245.50", "$120.80", "$380.25", "-$50.60", "$195.40"],
-            "Avg RRR": ["1.8", "1.5", "2.1", "1.2", "1.6"]
-        }
-        
-        instruments_df = pd.DataFrame(instruments_data)
-        st.dataframe(instruments_df, use_container_width=True)
-        
-        # Analiza strategii
-        st.subheader("Wydajność Strategii")
-        
         # Przykładowe dane
-        strategies = ['Scalping', 'Intraday', 'Swing']
-        profit = [320, 480, 200]
-        trades = [45, 30, 15]
+        symbols = ["EURUSD", "GOLD", "USDJPY", "GBPUSD", "OIL"]
+        profits = [325.50, 145.80, -53.20, 89.70, -120.30]
         
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=strategies, y=profit, name='Zysk', marker_color='lightgreen'
-        ))
-        fig.add_trace(go.Bar(
-            x=strategies, y=trades, name='Liczba Transakcji', marker_color='lightblue'
+        symbol_data = pd.DataFrame({
+            "Symbol": symbols,
+            "Zysk/Strata": profits
+        })
+        
+        # Formatowanie zysku w walucie PLN
+        symbol_data['Zysk/Strata Formatowany'] = symbol_data['Zysk/Strata'].apply(format_currency)
+        
+        # Kolor na podstawie wartości profit
+        symbol_data['Color'] = symbol_data['Zysk/Strata'].apply(
+            lambda x: 'green' if x > 0 else 'red'
+        )
+        
+        fig = go.Figure(go.Bar(
+            x=symbol_data['Symbol'],
+            y=symbol_data['Zysk/Strata'],
+            marker_color=symbol_data['Color'],
+            text=symbol_data['Zysk/Strata Formatowany'],
+            textposition='auto'
         ))
         
         fig.update_layout(
-            height=300,
+            height=400,
             margin=dict(l=0, r=0, t=0, b=0),
-            legend=dict(orientation="h", y=1.02),
-            xaxis_title="Strategia",
-            yaxis_title="Wartość"
+            xaxis_title="Instrument",
+            yaxis_title=f"Zysk/Strata ({CURRENCY})"
         )
         
         st.plotly_chart(fig, use_container_width=True)
+    
+    # Statystyki handlowe
+    st.subheader("Statystyki Handlowe")
+    
+    stats_cols = st.columns(3)
+    
+    stats_cols[0].metric(label="Łącznie Transakcji", value="48")
+    stats_cols[1].metric(label="Zyskowne Transakcje", value="30")
+    stats_cols[2].metric(label="Stratne Transakcje", value="18")
+    
+    # Metryki ryzyka
+    st.subheader("Metryki Ryzyka")
+    
+    risk_cols = st.columns(4)
+    
+    risk_cols[0].metric(label="Średni RRR", value="1,85")
+    risk_cols[1].metric(label="Kalmar Ratio", value="0,95")
+    risk_cols[2].metric(label="Średnia Ekspozycja", value="15,3%")
+    risk_cols[3].metric(label="Max. Drawdown", value=format_currency(1250.00))
 
 def render_ai_analytics():
     """Renderuje zakładkę AI Analytics."""
-    st.header("AI Analytics")
-    
-    # Status modeli AI
-    st.subheader("Status Modeli AI")
-    
-    models_cols = st.columns(3)
-    
-    with models_cols[0]:
-        st.markdown(f"### Claude")
-        st.markdown(f"**Status:** {render_status_indicator('ok')}", unsafe_allow_html=True)
-        st.metric(label="Średni czas odpowiedzi", value="1.25s")
-        st.metric(label="Użycie dziś", value="45 zapytań")
-        st.metric(label="Koszt dziś", value="$0.85")
-    
-    with models_cols[1]:
-        st.markdown(f"### Grok")
-        st.markdown(f"**Status:** {render_status_indicator('warning')}", unsafe_allow_html=True)
-        st.metric(label="Średni czas odpowiedzi", value="2.45s")
-        st.metric(label="Użycie dziś", value="32 zapytań")
-        st.metric(label="Koszt dziś", value="$0.64")
-    
-    with models_cols[2]:
-        st.markdown(f"### DeepSeek")
-        st.markdown(f"**Status:** {render_status_indicator('ok')}", unsafe_allow_html=True)
-        st.metric(label="Średni czas odpowiedzi", value="1.85s")
-        st.metric(label="Użycie dziś", value="28 zapytań")
-        st.metric(label="Koszt dziś", value="$0.56")
+    st.header("Analityka AI")
     
     # Podział na dwie kolumny
     col1, col2 = st.columns(2)
     
     with col1:
-        # Logi decyzji
-        st.subheader("Logi Decyzji AI")
-        
-        decisions_data = {
-            "Czas": ["12:45:10", "12:30:22", "12:15:08", "12:00:45", "11:45:30"],
-            "Model": ["Claude", "Grok", "DeepSeek", "Claude", "Grok"],
-            "Decyzja": ["BUY EURUSD", "SELL GOLD", "HOLD", "CLOSE NASDAQ", "BUY GBPUSD"],
-            "Pewność": ["85%", "78%", "92%", "65%", "81%"],
-            "Wynik": ["Sukces", "Sukces", "Sukces", "Porażka", "Trwa"]
-        }
-        
-        decisions_df = pd.DataFrame(decisions_data)
-        st.dataframe(decisions_df, use_container_width=True)
-    
-    with col2:
-        # Jakość sygnałów
-        st.subheader("Jakość Sygnałów AI")
+        # Wydajność modeli AI
+        st.subheader("Wydajność Modeli AI")
         
         # Przykładowe dane
-        models = ['Claude', 'Grok', 'DeepSeek']
-        accuracy = [0.85, 0.78, 0.82]
-        signals = [45, 32, 28]
+        models = ["Claude", "Grok", "DeepSeek", "Ensemble"]
+        accuracy = [0.78, 0.72, 0.75, 0.82]
+        roi = [0.15, 0.05, 0.12, 0.18]
         
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=models, y=accuracy, name='Dokładność', marker_color='lightgreen'
-        ))
-        fig.add_trace(go.Bar(
-            x=models, y=[s/100 for s in signals], name='Liczba Sygnałów (x100)', marker_color='lightblue'
-        ))
+        model_data = pd.DataFrame({
+            "Model": models,
+            "Dokładność": accuracy,
+            "ROI": roi
+        })
+        
+        # Formatowanie ROI jako procent w polskim stylu
+        model_data['ROI Formatowany'] = model_data['ROI'].apply(format_percentage)
+        
+        # Formatowanie dokładności jako procent w polskim stylu
+        model_data['Dokładność Formatowana'] = model_data['Dokładność'].apply(format_percentage)
+        
+        fig = go.Figure(data=[
+            go.Bar(name='Dokładność', x=model_data['Model'], y=model_data['Dokładność'],
+                  text=model_data['Dokładność Formatowana'], textposition='auto'),
+            go.Bar(name='ROI', x=model_data['Model'], y=model_data['ROI'],
+                  text=model_data['ROI Formatowany'], textposition='auto')
+        ])
         
         fig.update_layout(
-            height=300,
+            barmode='group',
+            height=400,
             margin=dict(l=0, r=0, t=0, b=0),
             legend=dict(orientation="h", y=1.02),
-            xaxis_title="Model",
+            xaxis_title="Model AI",
             yaxis_title="Wartość"
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Koszt operacyjny
-        st.subheader("Koszt Operacyjny AI")
+        # Koszty API
+        st.subheader("Koszty API")
         
-        # Przykładowe dane
-        dates = pd.date_range(start=datetime.now() - timedelta(days=7), end=datetime.now(), freq='D')
-        costs = [0.75, 0.95, 1.25, 1.05, 0.85, 1.15, 1.45, 1.30]
+        # Przykładowe dane dla kosztów API
+        days = pd.date_range(start=datetime.now() - timedelta(days=14), end=datetime.now(), freq='D')
+        costs = [round(np.random.uniform(5, 15), 2) for _ in range(len(days))]
         
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=dates, y=costs, name='Dzienny koszt', line=dict(color='purple')
+        costs_df = pd.DataFrame({
+            "Data": days,
+            "Koszt": costs
+        })
+        
+        # Formatowanie kosztów w PLN
+        costs_df['Koszt Formatowany'] = costs_df['Koszt'].apply(format_currency)
+        
+        fig = go.Figure(go.Bar(
+            x=costs_df['Data'],
+            y=costs_df['Koszt'],
+            text=costs_df['Koszt Formatowany'],
+            textposition='auto',
+            marker_color='indianred'
         ))
         
         fig.update_layout(
-            height=250,
+            height=350,
             margin=dict(l=0, r=0, t=0, b=0),
             xaxis_title="Data",
-            yaxis_title="Koszt ($)"
+            yaxis_title=f"Koszt ({CURRENCY})"
         )
         
         st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Szczegóły predykcji
+        st.subheader("Szczegóły Predykcji")
+        
+        # Wybór modelu
+        selected_model = st.selectbox(
+            "Wybierz model",
+            ["Claude", "Grok", "DeepSeek", "Ensemble"]
+        )
+        
+        # Metryki modelu
+        metrics_cols = st.columns(3)
+        
+        metrics_cols[0].metric(label="Dokładność", value="78,5%")
+        metrics_cols[1].metric(label="Precyzja", value="82,3%")
+        metrics_cols[2].metric(label="F1-Score", value="80,1%")
+        
+        # Macierz konfuzji
+        st.subheader("Macierz Konfuzji")
+        
+        confusion_matrix = np.array([
+            [35, 8],
+            [5, 42]
+        ])
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=confusion_matrix,
+            x=['Przewidziane Negatywne', 'Przewidziane Pozytywne'],
+            y=['Faktyczne Negatywne', 'Faktyczne Pozytywne'],
+            hoverongaps=False,
+            colorscale='Blues',
+            text=confusion_matrix,
+            texttemplate="%{text}",
+            textfont={"size":14}
+        ))
+        
+        fig.update_layout(
+            height=300,
+            margin=dict(l=0, r=0, t=0, b=0)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Historia sygnałów AI
+        st.subheader("Historia Sygnałów AI")
+        
+        # Przykładowe dane
+        signals = [
+            {"id": 1, "timestamp": "2025-03-09 10:12:54", "model": "Claude", "symbol": "EURUSD", 
+             "signal": "BUY", "confidence": 0.85, "result": "SUCCESS", "profit": 55.40},
+            {"id": 2, "timestamp": "2025-03-09 09:45:22", "model": "Grok", "symbol": "GOLD", 
+             "signal": "SELL", "confidence": 0.72, "result": "FAILURE", "profit": -32.50},
+            {"id": 3, "timestamp": "2025-03-09 09:30:08", "model": "DeepSeek", "symbol": "USDJPY", 
+             "signal": "BUY", "confidence": 0.91, "result": "SUCCESS", "profit": 48.30},
+        ]
+        
+        signals_df = pd.DataFrame(signals)
+        
+        # Formatowanie kolumn
+        signals_df['timestamp'] = signals_df['timestamp'].apply(format_date)
+        signals_df['confidence'] = signals_df['confidence'].apply(format_percentage)
+        signals_df['profit'] = signals_df['profit'].apply(format_currency)
+        
+        st.dataframe(signals_df, use_container_width=True)
 
 def render_system_status():
     """Renderuje zakładkę System Status."""
@@ -475,12 +552,12 @@ def render_system_status():
         
         resources_cols[0].metric(
             label="Użycie CPU",
-            value=f"{cpu_usage:.1f}%"
+            value=f"{cpu_usage:.1f}%".replace(".", ",")
         )
         
         resources_cols[1].metric(
             label="Użycie Pamięci",
-            value=f"{memory_usage:.1f} MB"
+            value=f"{memory_usage:.1f} MB".replace(".", ",")
         )
         
         # Przykładowe dane dla wykresu
@@ -488,150 +565,170 @@ def render_system_status():
         cpu_values = [max(min(cpu_usage + np.random.randint(-10, 10), 100), 0) for _ in range(len(times))]
         memory_values = [max(min(memory_usage + np.random.randint(-50, 50), 2048), 0) for _ in range(len(times))]
         
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=times, y=cpu_values, name='CPU (%)', line=dict(color='red')
-        ))
-        fig.add_trace(go.Scatter(
-            x=times, y=[m/20 for m in memory_values], name='Pamięć (MB/20)', line=dict(color='blue')
+        # Oddzielne wykresy dla CPU i pamięci
+        fig_cpu = go.Figure()
+        fig_cpu.add_trace(go.Scatter(
+            x=times, y=cpu_values, mode='lines+markers', name='CPU',
+            line=dict(color='blue', width=2)
         ))
         
-        fig.update_layout(
-            height=300,
-            margin=dict(l=0, r=0, t=0, b=0),
-            legend=dict(orientation="h", y=1.02),
+        fig_cpu.update_layout(
+            height=200,
+            margin=dict(l=0, r=0, t=30, b=0),
             xaxis_title="Czas",
-            yaxis_title="Użycie"
+            yaxis_title="Użycie CPU (%)",
+            title="Historia użycia CPU"
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_cpu, use_container_width=True)
+        
+        fig_mem = go.Figure()
+        fig_mem.add_trace(go.Scatter(
+            x=times, y=memory_values, mode='lines+markers', name='Pamięć',
+            line=dict(color='green', width=2)
+        ))
+        
+        fig_mem.update_layout(
+            height=200,
+            margin=dict(l=0, r=0, t=30, b=0),
+            xaxis_title="Czas",
+            yaxis_title="Pamięć (MB)",
+            title="Historia użycia pamięci"
+        )
+        
+        st.plotly_chart(fig_mem, use_container_width=True)
     
     with col2:
-        # Aktywne alerty
-        st.subheader("Aktywne Alerty")
+        # Alerty systemowe
+        st.subheader("Alerty Systemowe")
         
         # Pobierz alerty
         alerts_data = api_request("monitoring/alerts", params={"status": "open,acknowledged", "limit": 10})
         
         if not alerts_data:
-            alerts_data = [
-                {
-                    "alert_id": 1,
-                    "timestamp": "2025-03-09T12:30:00",
-                    "level": "ERROR",
-                    "category": "CONNECTION",
-                    "message": "Połączenie z EA_1234 nieaktywne od 5 minut",
-                    "status": "OPEN"
-                },
-                {
-                    "alert_id": 2,
-                    "timestamp": "2025-03-09T12:15:00",
-                    "level": "WARNING",
-                    "category": "TRADING",
-                    "message": "Zlecenie odrzucone: niewystarczający depozyt",
-                    "status": "ACKNOWLEDGED"
-                }
-            ]
+            # Przykładowe dane
+            alerts_data = {
+                "alerts": [
+                    {
+                        "id": "alert1",
+                        "level": "critical",
+                        "category": "connection",
+                        "message": "Utracono połączenie z EA_1741521231",
+                        "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
+                        "status": "open"
+                    },
+                    {
+                        "id": "alert2",
+                        "level": "warning",
+                        "category": "performance",
+                        "message": "Wysoki czas odpowiedzi serwera (>500ms)",
+                        "timestamp": (datetime.now() - timedelta(minutes=15)).isoformat(),
+                        "status": "acknowledged"
+                    }
+                ]
+            }
         
-        for alert in alerts_data:
-            level = alert.get("level", "WARNING")
-            if level == "CRITICAL":
-                status_color = "status-critical"
-            elif level == "ERROR":
-                status_color = "status-error"
-            elif level == "WARNING":
-                status_color = "status-warning"
-            else:
-                status_color = "status-ok"
-            
-            with st.container():
+        alerts = alerts_data.get("alerts", [])
+        
+        if alerts:
+            for alert in alerts:
+                alert_color = {
+                    "critical": "red",
+                    "error": "orange",
+                    "warning": "yellow",
+                    "info": "blue"
+                }.get(alert.get("level", "").lower(), "gray")
+                
+                alert_time = format_date(alert.get("timestamp", ""))
+                
                 st.markdown(
-                    f"<div style='padding: 10px; border-left: 5px solid #{status_color[7:]}; margin-bottom: 10px;'>"
-                    f"<strong>{alert.get('timestamp', '').split('T')[1].split('.')[0]} - {level}</strong><br>"
-                    f"{alert.get('message', '')}<br>"
-                    f"<small>Status: {alert.get('status', '')}, Kategoria: {alert.get('category', '')}</small>"
-                    f"</div>",
+                    f"""
+                    <div style="padding: 10px; border-left: 5px solid {alert_color}; margin-bottom: 10px; background-color: #f0f2f6;">
+                        <strong>{alert.get('level', '').upper()}</strong>: {alert.get('message', '')}
+                        <br><small>{alert_time} - {alert.get('category', '').upper()} - {alert.get('status', '').upper()}</small>
+                    </div>
+                    """,
                     unsafe_allow_html=True
                 )
+        else:
+            st.info("Brak aktywnych alertów")
         
-        # Statystyki zapytań
-        st.subheader("Statystyki Zapytań")
+        # Statystyki żądań
+        st.subheader("Statystyki Żądań")
         
+        # Przykładowe dane żądań
         requests_data = status_data.get("requests", {})
         
-        requests_cols = st.columns(2)
+        total_requests = requests_data.get("total", 0)
+        success_rate = requests_data.get("success_rate", 0)
         
-        requests_cols[0].metric(
-            label="Liczba Zapytań",
-            value=requests_data.get("total", 0)
+        st.metric(
+            label="Łączne Żądania",
+            value=f"{total_requests:,}".replace(",", " ")
         )
         
-        requests_cols[1].metric(
-            label="Sukces",
-            value=f"{requests_data.get('success_rate', 0):.1f}%"
+        st.metric(
+            label="Wskaźnik Powodzenia",
+            value=f"{success_rate:.1f}%".replace(".", ",")
         )
+        
+        # Podział typów żądań
+        request_types = {
+            "GET": 65,
+            "POST": 35
+        }
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=list(request_types.keys()),
+            values=list(request_types.values()),
+            hole=.3
+        )])
+        
+        fig.update_layout(
+            height=250,
+            margin=dict(l=0, r=0, t=30, b=0),
+            title="Podział typów żądań"
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
 
 def main():
     """Główna funkcja aplikacji."""
     # Tytuł aplikacji
-    st.title("AgentMT5 - Trading Agent Monitor")
+    st.title("AgentMT5 Trading Monitor")
     
-    # Zakładki główne
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Live Monitor", 
-        "📈 Performance Dashboard", 
-        "🧠 AI Analytics", 
-        "⚙️ System Status"
-    ])
+    # Pasek boczny
+    st.sidebar.image("https://raw.githubusercontent.com/jeden-/Agent-MT5/master/docs/logo.png", width=150)
+    st.sidebar.title("Nawigacja")
     
-    with tab1:
+    # Opcje menu
+    menu_options = [
+        "Live Monitor",
+        "Performance Dashboard",
+        "AI Analytics",
+        "System Status"
+    ]
+    
+    selected_option = st.sidebar.radio("Wybierz widok:", menu_options)
+    
+    # Wyświetlanie właściwej zakładki
+    if selected_option == "Live Monitor":
         render_live_monitor()
-    
-    with tab2:
+    elif selected_option == "Performance Dashboard":
         render_performance_dashboard()
-    
-    with tab3:
+    elif selected_option == "AI Analytics":
         render_ai_analytics()
-    
-    with tab4:
+    else:  # System Status
         render_system_status()
     
+    # Informacja o ostatniej aktualizacji
+    st.sidebar.info(f"Ostatnia aktualizacja: {format_date(datetime.now())}")
+    
     # Auto-refresh
-    if st.sidebar.checkbox("Automatyczne odświeżanie", value=True):
-        refresh_interval = st.sidebar.slider(
-            "Interwał odświeżania (s)", 
-            min_value=5, 
-            max_value=60, 
-            value=REFRESH_INTERVAL
-        )
-        
-        st.sidebar.write(f"Następne odświeżenie za {refresh_interval} s")
-        time.sleep(refresh_interval)
+    if st.sidebar.checkbox("Auto-odświeżanie", value=True):
+        st.empty()
+        time.sleep(REFRESH_INTERVAL)
         st.experimental_rerun()
-    
-    # Sidebar
-    st.sidebar.header("Ustawienia")
-    
-    st.sidebar.subheader("Serwer")
-    server_url = st.sidebar.text_input("URL Serwera", value=SERVER_URL)
-    
-    st.sidebar.subheader("Akcje")
-    if st.sidebar.button("Testuj Połączenie"):
-        try:
-            response = requests.get(f"{server_url}/status", timeout=5)
-            if response.status_code == 200:
-                st.sidebar.success("Połączenie z serwerem OK!")
-            else:
-                st.sidebar.error(f"Błąd połączenia: {response.status_code}")
-        except Exception as e:
-            st.sidebar.error(f"Błąd połączenia: {e}")
-    
-    if st.sidebar.button("Wyczyść Alerty"):
-        st.sidebar.info("Funkcja czyszczenia alertów w trakcie implementacji.")
-    
-    st.sidebar.subheader("System")
-    st.sidebar.info(f"Ostatnia aktualizacja: {datetime.now().strftime('%H:%M:%S')}")
-    st.sidebar.info(f"Wersja systemu: 0.1.0")
 
 if __name__ == "__main__":
     main() 
