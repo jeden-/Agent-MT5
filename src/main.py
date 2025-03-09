@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Moduły aplikacji
 # Importy będą odkomentowane w miarę implementacji poszczególnych modułów
 # from src.mt5_bridge import MT5Bridge
-# from src.database import DatabaseManager
+from src.database import DatabaseManager
 # from src.ai_models import AIModelManager
 # from src.risk_management import RiskManager
 # from src.position_management import PositionManager
@@ -63,7 +63,22 @@ class TradingAgent:
     def initialize_components(self):
         """Inicjalizacja wszystkich komponentów systemu."""
         self.logger.info("Inicjalizacja komponentów systemu...")
-        # Kod inicjalizacji komponentów zostanie dodany w miarę implementacji
+        
+        # Inicjalizacja bazy danych
+        self.logger.info("Inicjalizacja połączenia z bazą danych...")
+        self.db_manager = DatabaseManager()
+        self.db_manager.connect()
+        
+        # Sprawdzenie struktury bazy danych
+        self.logger.info("Sprawdzanie struktury bazy danych...")
+        try:
+            self.db_manager.create_tables()
+            self.logger.info("Struktura bazy danych zweryfikowana")
+        except Exception as e:
+            self.logger.error(f"Błąd podczas weryfikacji struktury bazy danych: {e}", exc_info=True)
+            raise
+        
+        # Pozostałe komponenty będą inicjalizowane w miarę implementacji
         self.logger.info("Inicjalizacja komponentów zakończona")
     
     def start(self):
@@ -93,7 +108,17 @@ class TradingAgent:
         """Zatrzymanie agenta."""
         self.logger.info("Zatrzymywanie Trading Agent MT5...")
         self.is_running = False
-        # Kod zamykania połączeń i zasobów zostanie dodany w miarę implementacji
+        
+        # Zamknięcie połączenia z bazą danych
+        if hasattr(self, 'db_manager'):
+            self.logger.info("Zamykanie połączenia z bazą danych...")
+            try:
+                self.db_manager.close()
+                self.logger.info("Połączenie z bazą danych zamknięte")
+            except Exception as e:
+                self.logger.error(f"Błąd podczas zamykania połączenia z bazą danych: {e}", exc_info=True)
+        
+        # Pozostały kod zamykania połączeń i zasobów zostanie dodany w miarę implementacji
         self.logger.info("Trading Agent MT5 zatrzymany")
 
 def main():

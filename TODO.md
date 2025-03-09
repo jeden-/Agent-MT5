@@ -211,7 +211,11 @@ Maintenance
    [x] Implementacja Position Manager
    [x] Testy jednostkowe
    [x] Dokumentacja
-[ ] Integracja z bazą danych
+[x] Integracja z bazą danych
+   [x] Inicjalizacja połączenia w głównej aplikacji
+   [x] Skrypty do zarządzania bazą (cli, docker)
+   [x] Testy integracyjne bazy danych
+   [x] Dokumentacja bazy danych
 [ ] Zarządzanie ryzykiem
 [ ] Integracja z modelami AI
 
