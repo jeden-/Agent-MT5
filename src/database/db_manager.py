@@ -39,9 +39,9 @@ class DatabaseManager:
         # Parametry połączenia
         self._host = os.getenv('DB_HOST', 'localhost')
         self._port = os.getenv('DB_PORT', '5432')
-        self._dbname = os.getenv('DB_NAME', 'mt5remotetest')
-        self._user = os.getenv('DB_USER', 'mt5remote')
-        self._password = os.getenv('DB_PASSWORD', 'mt5remote')
+        self._dbname = os.getenv('DB_NAME', 'mt5_agent')
+        self._user = os.getenv('DB_USER', 'postgres')
+        self._password = os.getenv('DB_PASSWORD', '')
         
         # Dodatkowe parametry
         self._pool_min_size = int(os.getenv('DB_POOL_MIN_SIZE', '5'))
