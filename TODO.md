@@ -54,12 +54,12 @@ Etap 2: Basic Operations
 [x] Wizualizacja danych
 3. Faza 2 - System zarządzania
 Etap 3: Position Management
-[ ] Position: Position Manager
+[x] Position: Position Manager
 
-[ ] Śledzenie pozycji
-[ ] Zarządzanie stanem
-[ ] Synchronizacja z MT5
-[ ] System recovery
+[x] Śledzenie pozycji
+[x] Zarządzanie stanem
+[x] Synchronizacja z MT5
+[x] System recovery
 [ ] Risk: Risk Management
 
 [ ] Walidacja zleceń
@@ -194,6 +194,12 @@ Maintenance
    [x] Wizualizacja danych handlowych
    [x] Monitoring stanu systemu i alertów
    [x] Analityka AI
+[x] Zarządzanie pozycjami
+   [x] Dodawanie i śledzenie pozycji
+   [x] Aktualizacja stanu pozycji
+   [x] Zamykanie pozycji
+   [x] Synchronizacja z MT5
+   [x] Odzyskiwanie po awarii
 
 10. Następne Kroki (dodane)
 [x] Poprawa testów jednostkowych
@@ -201,8 +207,12 @@ Maintenance
    [x] Zwiększenie pokrycia testami
 [x] Implementacja systemu monitorowania
 [x] Implementacja interfejsu użytkownika
-[ ] Zarządzanie pozycjami
+[x] Zarządzanie pozycjami
+   [x] Implementacja Position Manager
+   [x] Testy jednostkowe
+   [x] Dokumentacja
 [ ] Integracja z bazą danych
+[ ] Zarządzanie ryzykiem
 [ ] Integracja z modelami AI
 
 Note: Mark tasks as completed using [x] instead of [ ] when done
