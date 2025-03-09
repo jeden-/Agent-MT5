@@ -34,18 +34,18 @@ Etap 1: Core Infrastructure
 [x] Zarządzanie połączeniem
 [x] Podstawowy error handling
 Etap 2: Basic Operations
-[ ] Trading: Podstawowe operacje handlowe
+[x] Trading: Podstawowe operacje handlowe
 
 [x] Otwieranie pozycji
 [x] Zamykanie pozycji
 [x] Modyfikacja zleceń
-[ ] Pobieranie stanu konta
-[ ] Monitoring: System monitorowania
+[x] Pobieranie stanu konta
+[x] Monitoring: System monitorowania
 
-[ ] Logowanie operacji
-[ ] Śledzenie stanu połączenia
-[ ] Podstawowe alerty
-[ ] Status systemu
+[x] Logowanie operacji
+[x] Śledzenie stanu połączenia
+[x] Podstawowe alerty
+[x] Status systemu
 3. Faza 2 - System zarządzania
 Etap 3: Position Management
 [ ] Position: Position Manager
@@ -173,11 +173,24 @@ Maintenance
    [x] Wymiana danych JSON
    [x] Polling zamiast socketów
    [x] Odporność na błędy połączenia
+[x] Podstawowe operacje handlowe
+   [x] Otwieranie/zamykanie/modyfikacja pozycji
+   [x] Pobieranie stanu konta
+   [x] Dokumentacja operacji handlowych
+[x] System monitorowania
+   [x] Logowanie operacji i zdarzeń
+   [x] Śledzenie stanu połączeń
+   [x] System alertów i reguł
+   [x] Generowanie raportów o stanie systemu
+   [x] Integracja z serwerem HTTP
 
 10. Następne Kroki (dodane)
-[ ] Implementacja operacji handlowych
-[ ] Integracja z bazą danych
+[x] Poprawa testów jednostkowych
+   [x] Refaktoryzacja testów dla operacji handlowych
+   [x] Zwiększenie pokrycia testami
+[x] Implementacja systemu monitorowania
 [ ] Zarządzanie pozycjami
+[ ] Integracja z bazą danych
 [ ] Integracja z modelami AI
 
 Note: Mark tasks as completed using [x] instead of [ ] when done

@@ -6,6 +6,7 @@
    - [Otwieranie pozycji](#otwieranie-pozycji)
    - [Zamykanie pozycji](#zamykanie-pozycji)
    - [Modyfikacja pozycji](#modyfikacja-pozycji)
+   - [Pobieranie informacji o koncie](#pobieranie-informacji-o-koncie)
 3. [Przykłady użycia](#przykłady-użycia)
 4. [Obsługa błędów](#obsługa-błędów)
 
@@ -120,6 +121,49 @@ Komunikacja odbywa się poprzez dwa główne kanały:
 }
 ```
 
+### Pobieranie informacji o koncie
+
+**Endpoint:** `GET /account_info/get`
+
+**Opis:** Pobiera aktualne informacje o stanie konta, które zostały wcześniej wysłane przez Expert Advisor
+
+**Parametry obowiązkowe:**
+- `ea_id` (string): Identyfikator EA, którego informacje o koncie chcemy pobrać
+
+**Przykładowe zapytanie:**
+```
+GET /account_info/get?ea_id=EA_12345 HTTP/1.1
+Host: 127.0.0.1:5555
+```
+
+**Przykładowa odpowiedź (gdy dane są dostępne):**
+```json
+{
+  "status": "ok",
+  "account_info": {
+    "account": 12345678,
+    "balance": 10000.00,
+    "equity": 10050.00,
+    "margin": 200.00,
+    "free_margin": 9850.00,
+    "currency": "USD",
+    "profit": 50.00,
+    "name": "Test Account",
+    "leverage": 100,
+    "last_update": "2025-03-10 12:00:00"
+  }
+}
+```
+
+**Przykładowa odpowiedź (gdy dane nie są dostępne):**
+```json
+{
+  "status": "warning",
+  "message": "No account information for EA EA_12345",
+  "account_info": {}
+}
+```
+
 ## Przykłady użycia
 
 ### Python - otwieranie pozycji
@@ -158,6 +202,26 @@ data = {
 
 response = requests.post(url, headers=headers, data=json.dumps(data))
 print(response.json())
+```
+
+### Python - pobieranie informacji o koncie
+
+```python
+import requests
+
+url = "http://127.0.0.1:5555/account_info/get?ea_id=EA_12345"
+response = requests.get(url)
+print(response.json())
+
+# Obsługa danych konta
+account_data = response.json()
+if account_data['status'] == 'ok':
+    account_info = account_data['account_info']
+    print(f"Stan konta: {account_info['balance']} {account_info['currency']}")
+    print(f"Equity: {account_info['equity']} {account_info['currency']}")
+    print(f"Aktualny zysk: {account_info['profit']} {account_info['currency']}")
+else:
+    print(f"Brak danych konta: {account_data['message']}")
 ```
 
 ## Obsługa błędów

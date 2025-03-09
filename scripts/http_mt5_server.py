@@ -17,6 +17,13 @@ import os
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 
+# Import komponentów monitorowania
+from src.monitoring.monitoring_logger import get_logger as get_monitoring_logger
+from src.monitoring.monitoring_logger import OperationType, OperationStatus, LogLevel
+from src.monitoring.connection_tracker import get_connection_tracker
+from src.monitoring.alert_manager import get_alert_manager, AlertLevel, AlertCategory, initialize_default_rules
+from src.monitoring.status_reporter import get_status_reporter
+
 # Konfiguracja loggera
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +32,13 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger('HTTP_MT5_Server')
+
+# Inicjalizacja komponentów monitorowania
+monitoring_logger = get_monitoring_logger()
+connection_tracker = get_connection_tracker()
+alert_manager = get_alert_manager()
+status_reporter = get_status_reporter()
+initialize_default_rules()
 
 # Globalny stan serwera
 connected_clients = {}  # Słownik klientów: {ea_id: {last_active: timestamp, ...}}
@@ -48,9 +62,18 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         """Obsługa zapytań GET."""
         try:
+            start_time = time.time()
+            status_reporter.increment_request_counter()
+            
             parsed_url = urlparse(self.path)
             path = parsed_url.path
             query = parse_qs(parsed_url.query)
+            
+            # Wyciągnięcie EA ID z query
+            ea_id = query.get('ea_id', ['UNKNOWN'])[0]
+            
+            # Aktualizacja aktywności połączenia
+            connection_tracker.update_activity(ea_id)
             
             if path == '/ping':
                 self.handle_ping()
@@ -58,58 +81,115 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
                 self.handle_get_commands(query)
             elif path == '/status':
                 self.handle_server_status()
+            elif path == '/account_info/get':
+                self.handle_get_account_info(query)
+            # Dodanie nowych endpointów monitorowania
+            elif path == '/monitoring/logs':
+                self.handle_get_logs(query)
+            elif path == '/monitoring/connections':
+                self.handle_get_connections(query)
+            elif path == '/monitoring/alerts':
+                self.handle_get_alerts(query)
+            elif path == '/monitoring/status':
+                self.handle_get_monitoring_status(query)
             else:
-                self.send_response(404)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'status': 'error', 'message': 'Endpoint not found'}).encode())
+                self.send_error_response("Endpoint not found")
+            
+            # Rejestracja czasu odpowiedzi
+            response_time = (time.time() - start_time) * 1000  # w milisekundach
+            status_reporter.record_response_time(response_time)
+                
         except Exception as e:
-            logger.error(f"Błąd podczas obsługi zapytania GET: {str(e)}")
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
+            logger.error(f"Błąd podczas obsługi żądania GET: {str(e)}")
+            monitoring_logger.error(
+                "SYSTEM", 
+                OperationType.SYSTEM, 
+                OperationStatus.FAILED, 
+                {"error": str(e), "path": self.path}, 
+                f"Error in GET request handling: {str(e)}"
+            )
+            self.send_error_response(f"Internal server error: {str(e)}")
     
     def do_POST(self):
         """Obsługa zapytań POST."""
         try:
+            start_time = time.time()
+            status_reporter.increment_request_counter()
+            
             content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
+            post_data = self.rfile.read(content_length).decode('utf-8')
             
             try:
-                data = json.loads(post_data.decode('utf-8'))
-            except json.JSONDecodeError:
-                self.send_response(400)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'status': 'error', 'message': 'Invalid JSON'}).encode())
+                data = json.loads(post_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Błąd parsowania JSON: {str(e)}")
+                monitoring_logger.error(
+                    "SYSTEM", 
+                    OperationType.SYSTEM, 
+                    OperationStatus.FAILED, 
+                    {"error": str(e), "data": post_data}, 
+                    f"JSON parse error in POST request: {str(e)}"
+                )
+                self.send_error_response(f"Invalid JSON: {str(e)}")
                 return
             
-            if self.path == '/init':
+            # Wyciągnięcie EA ID z danych
+            ea_id = data.get('ea_id', 'UNKNOWN')
+            
+            # Aktualizacja aktywności połączenia
+            connection_tracker.update_activity(ea_id)
+            
+            # Obsługa endpointów
+            parsed_url = urlparse(self.path)
+            path = parsed_url.path
+            
+            if path == '/init':
                 self.handle_init(data)
-            elif self.path == '/position/update':
+            elif path == '/position/update':
                 self.handle_position_update(data)
-            elif self.path == '/market_data':
+            elif path == '/market_data':
                 self.handle_market_data(data)
-            elif self.path == '/account_info':
+            elif path == '/account_info':
                 self.handle_account_info(data)
-            elif self.path == '/position/open':
-                self.handle_open_position(data)
-            elif self.path == '/position/close':
-                self.handle_close_position(data)
-            elif self.path == '/position/modify':
+            elif path == '/position/modify':
                 self.handle_modify_position(data)
+                status_reporter.increment_command_counter()
+            elif path == '/position/open':
+                self.handle_open_position(data)
+                status_reporter.increment_command_counter()
+            elif path == '/position/close':
+                self.handle_close_position(data)
+                status_reporter.increment_command_counter()
+            # Dodanie nowych endpointów monitorowania
+            elif path == '/monitoring/acknowledge_alert':
+                self.handle_acknowledge_alert(data)
+            elif path == '/monitoring/resolve_alert':
+                self.handle_resolve_alert(data)
             else:
-                self.send_response(404)
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'status': 'error', 'message': 'Endpoint not found'}).encode())
+                logger.warning(f"Nieznany endpoint: {path}")
+                monitoring_logger.warning(
+                    ea_id, 
+                    OperationType.SYSTEM, 
+                    OperationStatus.FAILED, 
+                    {"path": path}, 
+                    f"Unknown endpoint: {path}"
+                )
+                self.send_error_response("Endpoint not found")
+            
+            # Rejestracja czasu odpowiedzi
+            response_time = (time.time() - start_time) * 1000  # w milisekundach
+            status_reporter.record_response_time(response_time)
+            
         except Exception as e:
-            logger.error(f"Błąd podczas obsługi zapytania POST: {str(e)}")
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode())
+            logger.error(f"Błąd podczas obsługi żądania POST: {str(e)}")
+            monitoring_logger.error(
+                "SYSTEM", 
+                OperationType.SYSTEM, 
+                OperationStatus.FAILED, 
+                {"error": str(e), "path": self.path}, 
+                f"Error in POST request handling: {str(e)}"
+            )
+            self.send_error_response(f"Internal server error: {str(e)}")
     
     def handle_ping(self):
         """Obsługa pingowania serwera."""
@@ -186,41 +266,44 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
     def handle_init(self, data):
         """Obsługa inicjalizacji EA."""
         if 'ea_id' not in data:
-            self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing ea_id parameter'}).encode())
+            self.send_error_response("Missing EA ID")
             return
         
         ea_id = data['ea_id']
+        action = data.get('action', 'init')
         
-        with clients_lock:
-            # Zapisanie lub aktualizacja informacji o kliencie
-            if 'action' in data and data['action'] == 'shutdown':
-                # EA informuje o zamknięciu
-                if ea_id in connected_clients:
-                    logger.info(f"Klient {ea_id} zgłosił zamknięcie, powód: {data.get('reason', 'nieznany')}")
-                    del connected_clients[ea_id]
-            else:
-                # Nowa inicjalizacja EA
-                connected_clients[ea_id] = {
-                    'last_active': time.time(),
-                    'terminal_info': data.get('terminal_info', {}),
-                    'init_time': datetime.now().isoformat()
-                }
-                logger.info(f"Nowy klient podłączony: {ea_id}")
-        
-        # Przygotowanie odpowiedzi
-        response = {
-            'status': 'ok',
-            'message': 'Initialization successful',
-            'server_time': datetime.now().isoformat()
-        }
+        if action == 'shutdown':
+            # EA informuje o zamknięciu
+            logger.info(f"EA {ea_id} informuje o zamknięciu, powód: {data.get('reason', 'unknown')}")
+            connection_tracker.disconnect(ea_id)
+            
+            monitoring_logger.info(
+                ea_id,
+                OperationType.INIT,
+                OperationStatus.SUCCESS,
+                {"action": "shutdown", "reason": data.get('reason', 'unknown')},
+                f"EA shutdown, reason: {data.get('reason', 'unknown')}"
+            )
+        else:
+            # EA informuje o inicjalizacji
+            logger.info(f"EA {ea_id} zainicjalizowany: {json.dumps(data.get('terminal_info', {}))}")
+            connection_tracker.register_connection(ea_id)
+            
+            monitoring_logger.info(
+                ea_id,
+                OperationType.INIT,
+                OperationStatus.SUCCESS,
+                {"terminal_info": data.get('terminal_info', {})},
+                f"EA initialized with terminal info: {json.dumps(data.get('terminal_info', {}))}"
+            )
         
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps(response).encode())
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'message': f'Initialization from {ea_id} received'
+        }).encode())
     
     def handle_position_update(self, data):
         """Aktualizacja informacji o pozycji."""
@@ -295,41 +378,79 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'status': 'ok', 'message': f'Market data for {symbol} updated'}).encode())
     
     def handle_account_info(self, data):
-        """Obsługa informacji o koncie."""
-        if 'ea_id' not in data or 'account' not in data:
-            self.send_response(400)
+        """Obsługa aktualizacji informacji o koncie."""
+        try:
+            required_fields = ['ea_id']
+            for field in required_fields:
+                if field not in data:
+                    self.send_error_response(f"Missing required field: {field}")
+                    return
+            
+            ea_id = data['ea_id']
+            
+            # Zapisujemy dane konta
+            with commands_lock:
+                account_info[ea_id] = {
+                    'account': data.get('account', 0),
+                    'balance': data.get('balance', 0.0),
+                    'equity': data.get('equity', 0.0),
+                    'margin': data.get('margin', 0.0),
+                    'free_margin': data.get('free_margin', 0.0),
+                    'currency': data.get('currency', ''),
+                    'profit': data.get('profit', 0.0),
+                    'name': data.get('name', ''),
+                    'leverage': data.get('leverage', 1),
+                    'last_update': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+            
+            # Logujemy operację
+            logger.info(f"Zaktualizowano informacje o koncie EA {ea_id}")
+            
+            # Wysyłamy odpowiedź
+            response = {
+                'status': 'ok',
+                'message': 'Account info updated successfully'
+            }
+            
+            self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing required parameters'}).encode())
-            return
-        
-        ea_id = data['ea_id']
-        account_id = data['account']
-        
-        # Aktualizacja czasu ostatniej aktywności klienta
-        with clients_lock:
-            if ea_id in connected_clients:
-                connected_clients[ea_id]['last_active'] = time.time()
-        
-        # Aktualizacja informacji o koncie
-        with account_lock:
-            account_info[account_id] = {
-                'balance': data.get('balance', 0.0),
-                'equity': data.get('equity', 0.0),
-                'margin': data.get('margin', 0.0),
-                'free_margin': data.get('free_margin', 0.0),
-                'currency': data.get('currency', ''),
-                'profit': data.get('profit', 0.0),
-                'name': data.get('name', ''),
-                'leverage': data.get('leverage', 0),
-                'last_update': datetime.now().isoformat(),
-                'updated_by': ea_id
-            }
-        
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({'status': 'ok', 'message': f'Account info for {account_id} updated'}).encode())
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            
+        except Exception as e:
+            logger.error(f"Błąd podczas aktualizacji informacji o koncie: {str(e)}")
+            self.send_error_response(f"Error updating account info: {str(e)}")
+
+    def handle_get_account_info(self, query):
+        """Obsługa pobierania informacji o koncie."""
+        try:
+            if 'ea_id' not in query:
+                self.send_error_response("Missing required parameter: ea_id")
+                return
+            
+            ea_id = query['ea_id'][0]
+            
+            with commands_lock:
+                if ea_id in account_info:
+                    response = {
+                        'status': 'ok',
+                        'account_info': account_info[ea_id]
+                    }
+                else:
+                    response = {
+                        'status': 'warning',
+                        'message': f'No account information for EA {ea_id}',
+                        'account_info': {}
+                    }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+            
+        except Exception as e:
+            logger.error(f"Błąd podczas pobierania informacji o koncie: {str(e)}")
+            self.send_error_response(f"Error retrieving account info: {str(e)}")
 
     def handle_modify_position(self, data):
         """Obsługa modyfikacji pozycji."""
@@ -387,6 +508,15 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
                 'status': 'error', 
                 'message': f'Missing required fields. Required: {required_fields}'
             }).encode())
+            
+            monitoring_logger.error(
+                data.get('ea_id', 'UNKNOWN'),
+                OperationType.OPEN_POSITION,
+                OperationStatus.FAILED,
+                {"error": "Missing required fields", "data": data},
+                f"Failed to open position: missing required fields"
+            )
+            status_reporter.record_operation_result(False)
             return
         
         # Przygotowanie polecenia otwarcia pozycji
@@ -418,6 +548,15 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
         # Logowanie operacji
         logger.info(f"Dodano polecenie otwarcia pozycji {data['symbol']} {data['order_type']} {data['volume']} dla EA {ea_id}")
         
+        monitoring_logger.info(
+            ea_id,
+            OperationType.OPEN_POSITION,
+            OperationStatus.SUCCESS,
+            {"symbol": data['symbol'], "type": data['order_type'], "volume": data['volume']},
+            f"Added open position command for {data['symbol']} {data['order_type']} {data['volume']}"
+        )
+        status_reporter.record_operation_result(True)
+        
         # Odpowiedź do klienta
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -438,6 +577,15 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
                 'status': 'error', 
                 'message': f'Missing required fields. Required: {required_fields}'
             }).encode())
+            
+            monitoring_logger.error(
+                data.get('ea_id', 'UNKNOWN'),
+                OperationType.CLOSE_POSITION,
+                OperationStatus.FAILED,
+                {"error": "Missing required fields", "data": data},
+                f"Failed to close position: missing required fields"
+            )
+            status_reporter.record_operation_result(False)
             return
         
         # Przygotowanie polecenia zamknięcia pozycji
@@ -462,6 +610,15 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
         volume_info = f" (volume={data['volume']})" if 'volume' in data else ""
         logger.info(f"Dodano polecenie zamknięcia pozycji #{data['ticket']}{volume_info} dla EA {ea_id}")
         
+        monitoring_logger.info(
+            ea_id,
+            OperationType.CLOSE_POSITION,
+            OperationStatus.SUCCESS,
+            {"ticket": data['ticket'], "volume": data.get('volume')},
+            f"Added close position command for ticket #{data['ticket']}{volume_info}"
+        )
+        status_reporter.record_operation_result(True)
+        
         # Odpowiedź do klienta
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -469,6 +626,226 @@ class MT5RequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({
             'status': 'ok',
             'message': 'Position close command added to queue'
+        }).encode())
+
+    # Nowe metody obsługi endpointów monitorowania
+    
+    def handle_get_logs(self, query):
+        """Obsługa pobierania logów."""
+        # Parametry filtrowania
+        start_time = query.get('start_time', [None])[0]
+        end_time = query.get('end_time', [None])[0]
+        level = query.get('level', [None])[0]
+        ea_id = query.get('ea_id', [None])[0]
+        limit = int(query.get('limit', ['100'])[0])
+        
+        # Konwersja parametrów
+        from datetime import datetime
+        if start_time:
+            try:
+                start_time = datetime.fromisoformat(start_time)
+            except ValueError:
+                start_time = None
+        if end_time:
+            try:
+                end_time = datetime.fromisoformat(end_time)
+            except ValueError:
+                end_time = None
+        if level:
+            try:
+                level = LogLevel[level]
+            except KeyError:
+                level = None
+        
+        # Pobieranie logów
+        logs = monitoring_logger.get_logs(
+            start_time=start_time,
+            end_time=end_time,
+            level=level,
+            ea_id=ea_id,
+            limit=limit
+        )
+        
+        # Konwersja do formatu JSON
+        logs_json = [log.to_dict() for log in logs]
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'logs': logs_json
+        }).encode())
+    
+    def handle_get_connections(self, query):
+        """Obsługa pobierania informacji o połączeniach."""
+        # Parametry filtrowania
+        ea_id = query.get('ea_id', [None])[0]
+        
+        # Pobieranie informacji o połączeniach
+        if ea_id:
+            connection_info = connection_tracker.get_connection_info(ea_id)
+            connections = [connection_info] if connection_info else []
+        else:
+            connections = connection_tracker.get_all_connections()
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'connections': connections
+        }).encode())
+    
+    def handle_get_alerts(self, query):
+        """Obsługa pobierania alertów."""
+        # Parametry filtrowania
+        level = query.get('level', [None])[0]
+        category = query.get('category', [None])[0]
+        status = query.get('status', [None])[0]
+        ea_id = query.get('ea_id', [None])[0]
+        start_time = query.get('start_time', [None])[0]
+        end_time = query.get('end_time', [None])[0]
+        limit = int(query.get('limit', ['100'])[0])
+        
+        # Konwersja parametrów
+        from datetime import datetime
+        if start_time:
+            try:
+                start_time = datetime.fromisoformat(start_time)
+            except ValueError:
+                start_time = None
+        if end_time:
+            try:
+                end_time = datetime.fromisoformat(end_time)
+            except ValueError:
+                end_time = None
+        if level:
+            try:
+                level = AlertLevel[level]
+            except KeyError:
+                level = None
+        if category:
+            try:
+                category = AlertCategory[category]
+            except KeyError:
+                category = None
+        if status:
+            try:
+                status = AlertStatus[status]
+            except KeyError:
+                status = None
+        
+        # Pobieranie alertów
+        alerts = alert_manager.get_alerts(
+            level=level,
+            category=category,
+            status=status,
+            ea_id=ea_id,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit
+        )
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'alerts': alerts
+        }).encode())
+    
+    def handle_get_monitoring_status(self, query):
+        """Obsługa pobierania statusu monitorowania."""
+        # Parametry
+        detail_level = query.get('detail_level', ['basic'])[0]
+        
+        # Pobieranie statusu
+        if detail_level == 'full':
+            status = status_reporter.get_full_status()
+        elif detail_level == 'detailed':
+            status = status_reporter.get_detailed_status()
+        else:
+            status = status_reporter.get_basic_status()
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'ok',
+            'system_status': status
+        }).encode())
+    
+    def handle_acknowledge_alert(self, data):
+        """Obsługa potwierdzania alertu."""
+        # Sprawdzenie wymaganych pól
+        if 'alert_id' not in data:
+            self.send_error_response("Missing alert_id")
+            return
+        
+        alert_id = int(data['alert_id'])
+        by = data.get('by', 'system')
+        
+        # Potwierdzenie alertu
+        success = alert_manager.acknowledge_alert(alert_id, by)
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        
+        if success:
+            self.wfile.write(json.dumps({
+                'status': 'ok',
+                'message': f'Alert {alert_id} acknowledged'
+            }).encode())
+        else:
+            self.wfile.write(json.dumps({
+                'status': 'error',
+                'message': f'Alert {alert_id} not found or already acknowledged'
+            }).encode())
+    
+    def handle_resolve_alert(self, data):
+        """Obsługa rozwiązywania alertu."""
+        # Sprawdzenie wymaganych pól
+        if 'alert_id' not in data:
+            self.send_error_response("Missing alert_id")
+            return
+        
+        alert_id = int(data['alert_id'])
+        by = data.get('by', 'system')
+        
+        # Rozwiązanie alertu
+        success = alert_manager.resolve_alert(alert_id, by)
+        
+        # Wysłanie odpowiedzi
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        
+        if success:
+            self.wfile.write(json.dumps({
+                'status': 'ok',
+                'message': f'Alert {alert_id} resolved'
+            }).encode())
+        else:
+            self.wfile.write(json.dumps({
+                'status': 'error',
+                'message': f'Alert {alert_id} not found or already resolved'
+            }).encode())
+    
+    def send_error_response(self, message):
+        """Wysyła odpowiedź błędu."""
+        self.send_response(400)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'status': 'error',
+            'message': message
         }).encode())
 
 def status_printer():
