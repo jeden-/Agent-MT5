@@ -1,17 +1,54 @@
-# Environments
-.env
-venv/
-env/
-ENV/
-
-# Logs
-logs/
-*.log
-
-# Python cache
+# Pliki systemowe
 __pycache__/
 *.py[cod]
-*.class
+*$py.class
 *.so
 .Python
+env/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Pliki środowiskowe
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Logi i dane cache
+*.log
+*.sqlite
+*.sqlite3
+*.db
+.cache/
+logs/
+.pytest_cache/
+
+# Pliki IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Pliki z potencjalnymi sekretami
+.cursor/rules/env.mdc
+.cursor/rules/*.mdc
+**/secrets.json
+**/config.json
+
+# Inne
+.coverage
+htmlcov/
