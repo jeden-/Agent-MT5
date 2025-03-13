@@ -43,19 +43,89 @@ class OrderValidationResult(Enum):
 
 @dataclass
 class RiskParameters:
-    """Parametry ryzyka dla konfiguracji zarządzania ryzykiem."""
-    max_positions_per_symbol: int = 3
-    max_positions_total: int = 10
-    max_daily_loss_percent: float = 2.0
-    max_position_size_percent: float = 5.0
-    min_risk_reward_ratio: float = 1.5
-    default_stop_loss_pips: int = 30
-    trailing_stop_activation_pips: int = 20
-    max_exposure_percent: float = 20.0
-    max_exposure_per_symbol_percent: float = 10.0
-    max_correlated_symbols_exposure_percent: float = 15.0
-    auto_hedging_enabled: bool = False
-    debug_mode: bool = False
+    """Parametry zarządzania ryzykiem."""
+    
+    def __init__(self):
+        # Parametry limitów pozycji
+        self.max_positions_per_symbol = 1    # Maksymalna liczba pozycji na symbol
+        self.max_positions_total = 3         # Maksymalna łączna liczba pozycji (zwiększamy do 3)
+        
+        # Parametry codziennego limitu strat
+        self.daily_loss_limit_percent = 5.0  # Limit dziennej straty jako procent kapitału
+        self.daily_loss_limit_absolute = 0.0 # Limit dziennej straty jako wartość absolutna (0 oznacza brak limitu)
+        
+        # Parametry wielkości pozycji
+        self.max_lot_size = 0.1              # Maksymalny rozmiar lota
+        self.base_lot_size = 0.01            # Podstawowy rozmiar lota
+        self.position_sizing_method = 'fixed' # fixed, percent, kelly, martingale
+        self.max_risk_per_trade_percent = 2.0 # Maksymalne ryzyko na transakcję jako procent kapitału
+        self.position_size_percent = 5.0     # Maksymalny rozmiar pozycji jako procent kapitału
+        
+        # Parametry stosunku zysku do ryzyka
+        self.min_risk_reward_ratio = 1.5     # Minimalny stosunek potencjalnego zysku do ryzyka
+        self.target_risk_reward_ratio = 2.0  # Docelowy stosunek potencjalnego zysku do ryzyka
+        
+    def check_daily_loss_limit(self, current_balance, starting_balance):
+        """Sprawdza, czy dzienny limit strat został przekroczony."""
+        if starting_balance <= 0:
+            return False
+        
+        loss_percent = (starting_balance - current_balance) / starting_balance * 100
+        
+        # Sprawdź procentowy limit strat
+        if self.daily_loss_limit_percent > 0 and loss_percent >= self.daily_loss_limit_percent:
+            return True
+        
+        # Sprawdź absolutny limit strat
+        if self.daily_loss_limit_absolute > 0 and (starting_balance - current_balance) >= self.daily_loss_limit_absolute:
+            return True
+        
+        return False
+    
+    def calculate_position_size(self, account_balance, risk_per_trade=None, price=None, stop_loss=None):
+        """Oblicza wielkość pozycji na podstawie parametrów ryzyka."""
+        if risk_per_trade is None:
+            risk_per_trade = self.max_risk_per_trade_percent
+        
+        # Metoda stałej wielkości
+        if self.position_sizing_method == 'fixed':
+            return min(self.base_lot_size, self.max_lot_size)
+        
+        # Metoda procentowa
+        elif self.position_sizing_method == 'percent':
+            if price is None or stop_loss is None or price == stop_loss:
+                return min(self.base_lot_size, self.max_lot_size)
+            
+            risk_amount = account_balance * (risk_per_trade / 100)
+            pip_value = 10  # 10 USD per pip dla standardowego lota
+            price_difference = abs(price - stop_loss)
+            
+            # Oblicz wielkość pozycji
+            position_size = risk_amount / (price_difference * pip_value)
+            
+            # Ograniczenie do maks. wielkości pozycji
+            return min(position_size, self.max_lot_size)
+        
+        # Domyślnie zwróć podstawową wielkość
+        return min(self.base_lot_size, self.max_lot_size)
+    
+    def check_risk_reward_ratio(self, entry_price, stop_loss, take_profit):
+        """Sprawdza, czy stosunek potencjalnego zysku do ryzyka jest akceptowalny."""
+        if entry_price is None or stop_loss is None or take_profit is None:
+            return False
+        
+        if entry_price == stop_loss or entry_price == take_profit:
+            return False
+        
+        risk = abs(entry_price - stop_loss)
+        reward = abs(entry_price - take_profit)
+        
+        if risk == 0:
+            return False
+        
+        risk_reward_ratio = reward / risk
+        
+        return risk_reward_ratio >= self.min_risk_reward_ratio
 
 
 class RiskManager:
@@ -153,7 +223,7 @@ class RiskManager:
         self.daily_pl += profit_loss
         
         # Sprawdzenie limitu dziennej straty
-        if self.daily_pl < 0 and abs(self.daily_pl) > (self.account_balance * self.parameters.max_daily_loss_percent / 100):
+        if self.daily_pl < 0 and abs(self.daily_pl) > (self.account_balance * self.parameters.daily_loss_limit_percent / 100):
             logger.warning(f"Przekroczony limit dziennej straty: {self.daily_pl}")
             # TODO: Implementacja akcji po przekroczeniu limitu dziennej straty
     
@@ -241,8 +311,8 @@ class RiskManager:
         
         # Sprawdzenie rozmiaru pozycji w stosunku do kapitału
         position_size_percent = (volume * price / self.account_balance) * 100
-        if position_size_percent > self.parameters.max_position_size_percent:
-            return False, OrderValidationResult.EXPOSURE_LIMIT_EXCEEDED, f"Rozmiar pozycji przekracza limit {self.parameters.max_position_size_percent}%"
+        if position_size_percent > self.parameters.position_size_percent:
+            return False, OrderValidationResult.EXPOSURE_LIMIT_EXCEEDED, f"Rozmiar pozycji przekracza limit {self.parameters.position_size_percent}%"
         
         # Sprawdzenie ekspozycji dla symbolu
         symbol_exposure = self.current_exposure.get(symbol, 0) + (volume * price)
@@ -269,8 +339,8 @@ class RiskManager:
                 # Sprawdzenie stosunku zysk/ryzyko
                 risk = price - sl
                 reward = tp - price
-                if risk > 0 and reward / risk < self.parameters.min_risk_reward_ratio:
-                    return False, OrderValidationResult.RISK_REWARD_INVALID, f"Stosunek zysk/ryzyko poniżej minimum {self.parameters.min_risk_reward_ratio}"
+                if risk > 0 and reward / risk < self.parameters.risk_reward_ratio:
+                    return False, OrderValidationResult.RISK_REWARD_INVALID, f"Stosunek zysk/ryzyko poniżej minimum {self.parameters.risk_reward_ratio}"
             
             elif 'type' in order and order['type'] in ['sell', 'sell_limit', 'sell_stop']:
                 # Dla pozycji krótkich (sell)
@@ -282,8 +352,8 @@ class RiskManager:
                 # Sprawdzenie stosunku zysk/ryzyko
                 risk = sl - price
                 reward = price - tp
-                if risk > 0 and reward / risk < self.parameters.min_risk_reward_ratio:
-                    return False, OrderValidationResult.RISK_REWARD_INVALID, f"Stosunek zysk/ryzyko poniżej minimum {self.parameters.min_risk_reward_ratio}"
+                if risk > 0 and reward / risk < self.parameters.risk_reward_ratio:
+                    return False, OrderValidationResult.RISK_REWARD_INVALID, f"Stosunek zysk/ryzyko poniżej minimum {self.parameters.risk_reward_ratio}"
         
         return True, OrderValidationResult.VALID, None
     
@@ -315,7 +385,7 @@ class RiskManager:
         position_size = risk_amount / price_difference
         
         # Limitowanie rozmiaru pozycji do maksymalnego dozwolonego procentu
-        max_position_size = (self.account_balance * self.parameters.max_position_size_percent / 100) / price
+        max_position_size = (self.account_balance * self.parameters.position_size_percent / 100) / price
         if position_size > max_position_size:
             position_size = max_position_size
         
@@ -335,7 +405,7 @@ class RiskManager:
             float: Poziom stop-loss.
         """
         # Domyślna wartość w pipsach
-        default_pips = self.parameters.default_stop_loss_pips
+        default_pips = self.parameters.stop_loss_percent * 100
         
         # Konwersja pipsów na punkty cenowe (zależy od instrumentu)
         pip_value = 0.0001  # Domyślna wartość dla par FOREX (może wymagać dostosowania dla innych instrumentów)
@@ -372,7 +442,7 @@ class RiskManager:
             float: Poziom take-profit.
         """
         # Wymagany stosunek zysk/ryzyko
-        risk_reward_ratio = self.parameters.min_risk_reward_ratio
+        risk_reward_ratio = self.parameters.risk_reward_ratio
         
         # Obliczenie różnicy między ceną wejścia a stop-lossem
         risk_distance = abs(entry_price - stop_loss)
@@ -408,7 +478,7 @@ class RiskManager:
             pip_value = 0.01
         
         # Minimalna aktywacja trailing stop w punktach cenowych
-        activation_distance = self.parameters.trailing_stop_activation_pips * pip_value
+        activation_distance = self.parameters.max_correlated_symbols_exposure_percent * pip_value
         
         if order_type.lower() in ['buy', 'buy_limit', 'buy_stop']:
             # Dla pozycji długich (buy)
@@ -483,10 +553,101 @@ class RiskManager:
             'risk_level': self.get_exposure_risk_level().value,
             'max_positions_per_symbol': self.parameters.max_positions_per_symbol,
             'max_positions_total': self.parameters.max_positions_total,
-            'max_daily_loss_percent': self.parameters.max_daily_loss_percent,
-            'max_position_size_percent': self.parameters.max_position_size_percent,
+            'daily_loss_limit_percent': self.parameters.daily_loss_limit_percent,
+            'daily_loss_limit_absolute': self.parameters.daily_loss_limit_absolute,
+            'position_size_percent': self.parameters.position_size_percent,
+            'position_size_fixed': self.parameters.position_size_fixed,
+            'risk_reward_ratio': self.parameters.risk_reward_ratio,
+            'stop_loss_percent': self.parameters.stop_loss_percent,
+            'take_profit_percent': self.parameters.take_profit_percent,
             'max_exposure_percent': self.parameters.max_exposure_percent,
-            'min_risk_reward_ratio': self.parameters.min_risk_reward_ratio
+            'max_exposure_per_symbol_percent': self.parameters.max_exposure_per_symbol_percent,
+            'max_correlated_symbols_exposure_percent': self.parameters.max_correlated_symbols_exposure_percent
+        }
+    
+    def validate_signal(self, signal: Dict) -> Dict:
+        """
+        Walidacja sygnału handlowego pod kątem ryzyka.
+        
+        Args:
+            signal: Słownik zawierający parametry sygnału.
+            
+        Returns:
+            Dict zawierający wynik walidacji:
+            - valid: Czy sygnał jest poprawny z punktu widzenia zarządzania ryzykiem.
+            - reason: Opcjonalny powód odrzucenia sygnału.
+            - risk_assessment: Dane o ocenie ryzyka.
+        """
+        # Sprawdzamy, czy mamy wszystkie potrzebne dane
+        if not signal:
+            return {'valid': False, 'reason': 'Brak danych sygnału'}
+            
+        symbol = signal.get('symbol')
+        signal_type = signal.get('type')
+        price = signal.get('price', 0.0)
+        confidence = signal.get('confidence', 0.0)
+        
+        # Walidacja podstawowych parametrów
+        if not symbol:
+            return {'valid': False, 'reason': 'Brak symbolu instrumentu'}
+            
+        if not signal_type:
+            return {'valid': False, 'reason': 'Brak typu sygnału'}
+            
+        if price <= 0:
+            return {'valid': False, 'reason': f'Nieprawidłowa cena: {price}'}
+            
+        # Sprawdzenie limitów pozycji dla symbolu
+        symbol_positions = self.position_counts.get(symbol, 0)
+        if symbol_positions >= self.parameters.max_positions_per_symbol:
+            return {
+                'valid': False, 
+                'reason': f'Przekroczony limit pozycji dla {symbol}: {symbol_positions}/{self.parameters.max_positions_per_symbol}'
+            }
+        
+        # Sprawdzenie całkowitego limitu pozycji
+        total_positions = sum(self.position_counts.values())
+        if total_positions >= self.parameters.max_positions_total:
+            return {
+                'valid': False, 
+                'reason': f'Przekroczony całkowity limit pozycji: {total_positions}/{self.parameters.max_positions_total}'
+            }
+            
+        # Sprawdzenie ekspozycji dla symbolu
+        # Zakładamy, że sygnał będzie realizowany z pewnym wolumenem, więc sprawdzamy tylko istniejącą ekspozycję
+        symbol_exposure_percent = 0
+        if self.account_balance > 0:
+            symbol_exposure = self.current_exposure.get(symbol, 0)
+            symbol_exposure_percent = (symbol_exposure / self.account_balance) * 100
+            
+        if symbol_exposure_percent > self.parameters.max_exposure_per_symbol_percent:
+            return {
+                'valid': False, 
+                'reason': f'Przekroczony limit ekspozycji dla {symbol}: {symbol_exposure_percent:.2f}%/{self.parameters.max_exposure_per_symbol_percent:.2f}%'
+            }
+            
+        # Sprawdzenie całkowitej ekspozycji
+        total_exposure_percent = 0
+        if self.account_balance > 0:
+            total_exposure = sum(self.current_exposure.values())
+            total_exposure_percent = (total_exposure / self.account_balance) * 100
+            
+        if total_exposure_percent > self.parameters.max_exposure_percent:
+            return {
+                'valid': False, 
+                'reason': f'Przekroczony całkowity limit ekspozycji: {total_exposure_percent:.2f}%/{self.parameters.max_exposure_percent:.2f}%'
+            }
+            
+        # Zwracamy pozytywny wynik walidacji
+        return {
+            'valid': True,
+            'risk_assessment': {
+                'symbol_positions': symbol_positions,
+                'total_positions': total_positions,
+                'symbol_exposure_percent': symbol_exposure_percent,
+                'total_exposure_percent': total_exposure_percent,
+                'risk_level': self.get_exposure_risk_level().value
+            }
         }
 
 
