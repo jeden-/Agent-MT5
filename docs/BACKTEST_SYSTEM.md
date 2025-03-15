@@ -22,6 +22,7 @@
 8. [Znane ograniczenia](#znane-ograniczenia)
 9. [Instrukcje dla użytkownika](#instrukcje-dla-użytkownika)
 10. [Plany rozwoju](#plany-rozwoju)
+11. [Tryby backtestingu](#tryby-backtestingu)
 
 ## Wprowadzenie
 
@@ -583,3 +584,70 @@ Plany rozwoju systemu backtestingu AgentMT5 obejmują:
    - Dodanie nowych typów wykresów i wizualizacji
    - Rozszerzenie opcji eksportu raportów
    - Implementacja alertów i powiadomień o wydajności strategii
+
+## 7. Tryby backtestingu
+
+System backtestingu AgentMT5 oferuje dwa tryby pracy, dostosowane do różnych poziomów zaawansowania użytkowników:
+
+### 7.1. Tryb automatyczny (dla początkujących)
+
+Tryb automatyczny został zaprojektowany z myślą o użytkownikach, którzy dopiero zaczynają przygodę z backtestingiem strategii lub chcą szybko przetestować podejście handlowe bez zagłębiania się w szczegóły techniczne.
+
+#### Kluczowe cechy trybu automatycznego:
+
+- **Uproszczony interfejs** - minimalna liczba parametrów do skonfigurowania
+- **Automatyczna analiza rynku** - system analizuje dane historyczne i wykrywa warunki rynkowe (trend, konsolidacja, zmienność)
+- **Dobór optymalnej strategii** - na podstawie warunków rynkowych system rekomenduje najbardziej odpowiednią strategię
+- **Dostosowanie parametrów do profilu ryzyka** - parametry strategii są automatycznie dostosowywane na podstawie wybranego profilu ryzyka (Konserwatywny, Zrównoważony, Agresywny)
+- **Możliwość przejścia do trybu zaawansowanego** - po wykonaniu automatycznego backtestu istnieje możliwość przejścia do trybu zaawansowanego z zachowaniem dobranych parametrów
+
+#### Jak działa analiza warunków rynkowych:
+
+1. **Analiza trendu** - wykorzystuje wskaźniki ADX, +DI, -DI oraz wzajemną relację średnich kroczących dla określenia siły i kierunku trendu
+2. **Analiza zmienności** - wykorzystuje ATR (Average True Range) oraz zmienność historyczną (odchylenie standardowe zwrotów) do określenia poziomu zmienności rynku
+3. **Analiza konsolidacji** - wykorzystuje szerokość pasm Bollingera oraz czas przebywania RSI w okolicy wartości neutralnych do określenia, czy rynek jest w konsolidacji
+
+#### Automatyczny dobór strategii:
+
+| Warunki rynkowe | Rekomendowana strategia | Uzasadnienie |
+| --- | --- | --- |
+| Silny trend wzrostowy/spadkowy | SimpleMovingAverage | Najlepiej sprawdza się przy czystych trendach |
+| Umiarkowany trend | SimpleMovingAverage / MACD | Dobra równowaga między podążaniem za trendem a unikaniem szumu |
+| Konsolidacja (rynek w zakresie) | BollingerBands | Efektywnie wykorzystuje odbicia od krawędzi zakresu |
+| Wysoka zmienność | RSI | Pomaga unikać fałszywych sygnałów w zmiennych warunkach |
+| Niska zmienność | MACD | Dobrze radzi sobie z wykrywaniem niewielkich zmian impulsu cenowego |
+
+### 7.2. Tryb zaawansowany (dla ekspertów)
+
+Tryb zaawansowany daje pełną kontrolę nad wszystkimi aspektami backtestingu, umożliwiając doświadczonym traderom i badaczom szczegółowe dostrojenie strategii i parametrów testów.
+
+#### Kluczowe cechy trybu zaawansowanego:
+
+- **Pełna kontrola nad parametrami strategii** - szczegółowa konfiguracja wszystkich parametrów technicznych strategii
+- **Dogłębna analiza wyników** - rozbudowane metryki i wizualizacje wyników
+- **Możliwość optymalizacji parametrów** - trzy metody optymalizacji (Grid Search, Random Search, Walk Forward)
+- **Generowanie raportów** - eksport wyników do różnych formatów (HTML, Excel)
+- **Konfiguracja zarządzania ryzykiem** - szczegółowe ustawienia kapitału początkowego i ryzyka na transakcję
+
+#### Dostępne funkcjonalności:
+
+1. **Konfigurator backtestingu** - ustawienia instrumentu, timeframe'u, strategii, zakresu dat, kapitału, ryzyka
+2. **Parametry strategii** - szczegółowa konfiguracja parametrów technicznych dla wybranej strategii
+3. **Wyniki i raporty** - szczegółowe wyniki, metryki, wykresy, historia transakcji, eksport danych
+4. **Optymalizacja parametrów** - narzędzia do znajdowania optymalnych parametrów dla wybranej strategii
+
+### 7.3. Przepływ pracy z systemem backtestingu
+
+Oto zalecany przepływ pracy z systemem backtestingu AgentMT5:
+
+1. **Dla nowych użytkowników**:
+   - Rozpocznij od trybu automatycznego
+   - Przetestuj różne instrumenty i okresy
+   - Sprawdź wyniki dla różnych profili ryzyka
+   - Po znalezieniu obiecującej konfiguracji, przejdź do trybu zaawansowanego z zachowanymi parametrami
+
+2. **Dla doświadczonych użytkowników**:
+   - Zacznij bezpośrednio w trybie zaawansowanym
+   - Skonfiguruj parametry strategii zgodnie z własną wiedzą i doświadczeniem
+   - Przeprowadź optymalizację dla znalezienia najlepszych parametrów
+   - Wykonaj testy walk-forward dla oceny odporności strategii
