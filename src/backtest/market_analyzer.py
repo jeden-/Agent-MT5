@@ -8,7 +8,12 @@ import numpy as np
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Tuple, List, Any, Optional
-import talib
+# import talib
+import ta
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info("Używam biblioteki ta zamiast talib w module market_analyzer")
 
 
 class MarketCondition(Enum):
@@ -195,15 +200,42 @@ class MarketAnalyzer:
         # i używamy domyślnych parametrów produkcyjnych
         if use_main_system_params:
             recommended_strategy = "CombinedIndicators"
-            recommended_params = self.base_combined_strategy_params.copy()
+            base_params = self.base_combined_strategy_params.copy()
+            
+            # Wyodrębnij weights i thresholds
+            weights = base_params.pop('weights', {})
+            thresholds = base_params.pop('thresholds', {})
+            
+            # Przechowuj pozostałe parametry w nowej strukturze
+            recommended_params = {
+                'weights': weights,
+                'thresholds': thresholds,
+                'config': {'params': base_params}
+            }
         else:
             # W przeciwnym razie uwzględniamy preferencje użytkownika i warunki rynkowe
             recommended_strategy = self._get_recommended_strategy(condition, strategy_preference)
             
             # Dostosowanie parametrów do profilu ryzyka
-            recommended_params = self._adjust_params_for_risk_profile(
-                self.strategy_params[condition][recommended_strategy], risk_profile
-            )
+            strategy_specific_params = self.strategy_params[condition][recommended_strategy].copy()
+            
+            # Jeśli to CombinedIndicatorsStrategy, musimy odpowiednio sformatować parametry
+            if recommended_strategy == "CombinedIndicators":
+                # Wyodrębnij weights i thresholds
+                weights = strategy_specific_params.pop('weights', {})
+                thresholds = strategy_specific_params.pop('thresholds', {})
+                
+                # Przechowuj pozostałe parametry w nowej strukturze
+                recommended_params = {
+                    'weights': weights,
+                    'thresholds': thresholds,
+                    'config': {'params': strategy_specific_params}
+                }
+            else:
+                # Dla innych strategii, parametry mogą być przekazywane bezpośrednio
+                recommended_params = self._adjust_params_for_risk_profile(
+                    strategy_specific_params, risk_profile
+                )
         
         # Łączymy wszystkie metryki
         combined_metrics = {**trend_metrics, **volatility_metrics, **range_metrics}
@@ -223,88 +255,147 @@ class MarketAnalyzer:
         high = data['high'].values
         low = data['low'].values
         
-        # Obliczamy ADX - wskaźnik siły trendu
-        adx = talib.ADX(high, low, close, timeperiod=14)
-        
-        # Obliczamy +DI i -DI, które wskazują kierunek trendu
-        plus_di = talib.PLUS_DI(high, low, close, timeperiod=14)
-        minus_di = talib.MINUS_DI(high, low, close, timeperiod=14)
-        
-        # Obliczamy MA - do określenia kierunku trendu
-        ma50 = talib.SMA(close, timeperiod=50)
-        ma200 = talib.SMA(close, timeperiod=200)
-        
-        # Obliczamy ostatnie wartości (pomijając NaN)
-        adx_last = float(adx[~np.isnan(adx)][-1])
-        plus_di_last = float(plus_di[~np.isnan(plus_di)][-1])
-        minus_di_last = float(minus_di[~np.isnan(minus_di)][-1])
-        
-        # Określenie trendu na podstawie MA
-        ma_trend = 1 if ma50[-1] > ma200[-1] else -1
-        
-        # Siła trendu
-        trend_strength = adx_last / 100.0  # Normalizacja do 0-1
-        
-        # Kierunek trendu (1 dla wzrostowego, -1 dla spadkowego)
-        trend_direction = 1 if plus_di_last > minus_di_last else -1
-        
-        return {
-            'trend_strength': trend_strength,
-            'trend_direction': trend_direction,
-            'adx': adx_last,
-            'ma_trend': ma_trend
-        }
+        try:
+            # Tworzymy DataFrame dla biblioteki ta
+            df = pd.DataFrame({'close': close, 'high': high, 'low': low})
+            
+            # Obliczamy ADX - wskaźnik siły trendu używając biblioteki ta
+            adx_indicator = ta.trend.ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
+            adx = adx_indicator.adx().values
+            
+            # Obliczamy +DI i -DI, które wskazują kierunek trendu
+            plus_di = adx_indicator.adx_pos().values
+            minus_di = adx_indicator.adx_neg().values
+            
+            # Obliczamy MA - do określenia kierunku trendu
+            ma50 = ta.trend.SMAIndicator(close=df['close'], window=50).sma_indicator().values
+            ma200 = ta.trend.SMAIndicator(close=df['close'], window=200).sma_indicator().values
+            
+            # Obliczamy ostatnie wartości (pomijając NaN)
+            adx_last = float(adx[~np.isnan(adx)][-1])
+            plus_di_last = float(plus_di[~np.isnan(plus_di)][-1])
+            minus_di_last = float(minus_di[~np.isnan(minus_di)][-1])
+            
+            # Określenie trendu na podstawie MA
+            ma_trend = 1 if ma50[-1] > ma200[-1] else -1
+            
+            # Siła trendu
+            trend_strength = adx_last / 100.0  # Normalizacja do 0-1
+            
+            # Kierunek trendu (1 dla wzrostowego, -1 dla spadkowego)
+            trend_direction = 1 if plus_di_last > minus_di_last else -1
+            
+            return {
+                'adx': adx_last,
+                'trend_strength': trend_strength,
+                'trend_direction': trend_direction,
+                'ma_trend': ma_trend
+            }
+        except Exception as e:
+            logger.error(f"Błąd podczas analizy trendu: {str(e)}")
+            # Zwracamy domyślne wartości w przypadku błędu
+            return {
+                'adx': 25.0,
+                'trend_strength': 0.25,
+                'trend_direction': 0,
+                'ma_trend': 0
+            }
     
     def _analyze_volatility(self, data: pd.DataFrame) -> Dict[str, float]:
         """Analizuje zmienność rynku"""
-        # Obliczamy zmienność historyczną (HV) jako odchylenie standardowe dziennych zmian ceny
         close = data['close'].values
-        returns = np.log(close[1:] / close[:-1])
-        
-        # Obliczamy zmienność dla różnych okresów
-        volatility_20d = np.std(returns[-20:]) * np.sqrt(252) if len(returns) >= 20 else 0  # Annualizowana
-        volatility_50d = np.std(returns[-50:]) * np.sqrt(252) if len(returns) >= 50 else 0
-        
-        # Obliczamy ATR (Average True Range)
         high = data['high'].values
         low = data['low'].values
-        atr = talib.ATR(high, low, close, timeperiod=14)
-        atr_last = float(atr[~np.isnan(atr)][-1])
         
-        # Normalizacja ATR do zakresu ceny
-        atr_relative = atr_last / close[-1]
-        
-        return {
-            'volatility_20d': volatility_20d,
-            'volatility_50d': volatility_50d,
-            'atr': atr_last,
-            'atr_relative': atr_relative
-        }
+        try:
+            # Tworzymy DataFrame dla biblioteki ta
+            df = pd.DataFrame({'close': close, 'high': high, 'low': low})
+            
+            # Obliczamy ATR (Average True Range) - wskaźnik zmienności
+            atr = ta.volatility.AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range().values
+            
+            # Ostatnia wartość ATR pomijając NaN
+            atr_last = float(atr[~np.isnan(atr)][-1])
+            
+            # Normalizacja ATR względem ceny zamknięcia
+            close_last = close[-1]
+            atr_percent = (atr_last / close_last) * 100
+            
+            # Kategoria zmienności
+            if atr_percent > 1.5:
+                volatility_category = "high"
+                volatility_score = min(1.0, atr_percent / 3.0)  # Capped at 1.0
+            elif atr_percent < 0.5:
+                volatility_category = "low"
+                volatility_score = max(0.0, atr_percent / 0.5)  # Scaled from 0 to 1
+            else:
+                volatility_category = "medium"
+                volatility_score = 0.5 + ((atr_percent - 0.5) / 2.0)  # Scaled from 0.5 to 1
+            
+            return {
+                'atr': atr_last,
+                'atr_percent': atr_percent,
+                'volatility_category': volatility_category,
+                'volatility_score': volatility_score
+            }
+        except Exception as e:
+            logger.error(f"Błąd podczas analizy zmienności: {str(e)}")
+            # Zwracamy domyślne wartości w przypadku błędu
+            return {
+                'atr': 0.001,
+                'atr_percent': 1.0,
+                'volatility_category': 'medium',
+                'volatility_score': 0.5
+            }
     
     def _analyze_range(self, data: pd.DataFrame) -> Dict[str, float]:
-        """Analizuje, czy rynek jest w konsolidacji"""
-        # Sprawdzamy, czy cena porusza się w ramach zakresu, używając wskaźnika BB
+        """Analizuje czy rynek jest w konsolidacji (range-bound)"""
         close = data['close'].values
         
-        # Obliczamy Bollinger Bands
-        upper, middle, lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
-        
-        # Obliczamy szerokość BB i normalizujemy ją do ceny środkowej
-        bb_width = (upper - lower) / middle
-        bb_width_last = float(bb_width[~np.isnan(bb_width)][-1])
-        
-        # Obliczamy RSI jako wskaźnik wykupienia/wyprzedania
-        rsi = talib.RSI(close, timeperiod=14)
-        rsi_last = float(rsi[~np.isnan(rsi)][-1])
-        
-        # Obliczamy procent czasu, jaki cena spędziła w przedziale 20-80 na RSI
-        rsi_range_time = np.sum((rsi >= 40) & (rsi <= 60)) / len(rsi[~np.isnan(rsi)])
-        
-        return {
-            'bb_width': bb_width_last,
-            'rsi': rsi_last,
-            'rsi_range_time': rsi_range_time
-        }
+        try:
+            # Tworzymy DataFrame dla biblioteki ta
+            df = pd.DataFrame({'close': close})
+            
+            # Używamy Bollinger Bands do określenia zakresu konsolidacji
+            bb_indicator = ta.volatility.BollingerBands(close=df['close'], window=20, window_dev=2)
+            upper = bb_indicator.bollinger_hband().values
+            middle = bb_indicator.bollinger_mavg().values
+            lower = bb_indicator.bollinger_lband().values
+            
+            # Szerokość wstęgi Bollingera jako % średniej
+            bb_width = (upper[-1] - lower[-1]) / middle[-1]
+            
+            # RSI do oceny, czy rynek jest na ekstremach (wykupienie/wyprzedanie)
+            rsi = ta.momentum.RSIIndicator(close=df['close'], window=14).rsi().values
+            rsi_last = float(rsi[~np.isnan(rsi)][-1])
+            
+            # Ocena konsolidacji (im mniejsza szerokość BB, tym większa szansa na konsolidację)
+            # Typowa szerokość to około 4-5%, poniżej 3% sugeruje konsolidację
+            is_narrow_bb = bb_width < 0.03
+            
+            # Rynek w konsolidacji, jeśli BB jest wąski i RSI jest w środkowym zakresie (np. 40-60)
+            is_ranging = is_narrow_bb and (rsi_last > 40 and rsi_last < 60)
+            
+            # Siła konsolidacji
+            range_strength = 1.0 - min(1.0, bb_width / 0.06)  # Odwrotnie proporcjonalne do szerokości BB
+            
+            return {
+                'bb_width': bb_width,
+                'is_narrow_bb': is_narrow_bb,
+                'is_ranging': is_ranging,
+                'range_strength': range_strength,
+                'rsi': rsi_last
+            }
+        except Exception as e:
+            logger.error(f"Błąd podczas analizy zakresu: {str(e)}")
+            # Zwracamy domyślne wartości w przypadku błędu
+            return {
+                'bb_width': 0.04,
+                'is_narrow_bb': False,
+                'is_ranging': False,
+                'range_strength': 0.5,
+                'rsi': 50.0
+            }
     
     def _determine_market_condition(self, trend_metrics: Dict[str, float], 
                                    volatility_metrics: Dict[str, float], 
@@ -326,15 +417,15 @@ class MarketAnalyzer:
                 return MarketCondition.MODERATE_DOWNTREND
                 
         # Sprawdzenie wysokiej zmienności
-        elif volatility_metrics['atr_relative'] > 0.015:  # ATR > 1.5% ceny
+        elif volatility_metrics['atr_percent'] > 1.5:  # ATR > 1.5% ceny
             return MarketCondition.HIGH_VOLATILITY
             
         # Sprawdzenie konsolidacji (zakresu)
-        elif range_metrics['bb_width'] < 0.04 and range_metrics['rsi_range_time'] > 0.7:
+        elif range_metrics['bb_width'] < 0.04 and range_metrics['range_strength'] > 0.7:
             return MarketCondition.RANGING
             
         # Sprawdzenie niskiej zmienności
-        elif volatility_metrics['atr_relative'] < 0.005:  # ATR < 0.5% ceny
+        elif volatility_metrics['atr_percent'] < 0.5:  # ATR < 0.5% ceny
             return MarketCondition.LOW_VOLATILITY
             
         # Domyślny przypadek - umiarkowany trend zgodny z MA

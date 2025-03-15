@@ -1,7 +1,7 @@
 ---
 description: Schemat blokowy Agenta
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 ┌─────────────────────────────────┐
 │     Inicjalizacja Agenta MT5    │

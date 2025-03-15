@@ -1,29 +1,58 @@
+# Server
+fastapi==0.115.11
+uvicorn==0.27.1
+python-dotenv==1.0.1
+
+# Trading
+MetaTrader5==5.0.45
+pandas==2.2.1
+numpy==1.26.4
+
+# AI
+openai==1.12.0  # dla Claude
+# grok-sdk==0.8.1  # dla Grok - niedostępny w PyPI
+# deepseek-api==0.5.2  # dla DeepSeek - niedostępny w PyPI
+
+# Testing
+pytest==8.3.5
+pytest-asyncio==0.23.5
+aiohttp==3.9.3
+
+# Monitoring
+prometheus-client==0.20.0
+python-json-logger==2.0.7
+psutil==5.9.5  # Monitorowanie zasobów systemowych
+
+# Utils
+pydantic==2.6.3
+python-dateutil==2.8.2
+pytz==2024.1
+
 # Podstawowe zależności
-python-dotenv==1.0.0
 psycopg2-binary==2.9.9
 requests==2.31.0
-pandas==2.0.3
-numpy==1.24.3
-
-# MetaTrader5 API
-MetaTrader5==5.0.45
+# numpy==1.24.3  # Usunięto duplikat, używamy nowszej wersji
 
 # AI i Machine Learning
 anthropic==0.7.4  # Claude API
-deepseek==0.1.2   # DeepSeek API
-requests-grok==0.1.0  # Grok API (przykładowy)
+# deepseek==0.1.2   # DeepSeek API - niedostępny w PyPI
+# requests-grok==0.1.0  # Grok API - niedostępny w PyPI
 
 # Przetwarzanie danych
 scikit-learn==1.3.0
-ta-lib==0.4.28  # Biblioteka do analizy technicznej
+# ta-lib==0.4.28  # Biblioteka do analizy technicznej - wymaga instalacji z plików binarnych
 
 # Monitoring i raportowanie
-prometheus-client==0.17.1
 matplotlib==3.7.2
 seaborn==0.12.2
 
 # Narzędzia deweloperskie
-pytest==7.4.0
 black==23.7.0
 flake8==6.1.0
-mypy==1.5.1 
+mypy==1.5.1
+
+# Backtesting
+seaborn==0.13.2
+matplotlib==3.9.4
+numpy>=1.20.0
+pandas>=1.2.0 

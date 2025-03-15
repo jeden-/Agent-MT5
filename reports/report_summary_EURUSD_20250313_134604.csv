@@ -1,0 +1,10 @@
+metric,value
+total_signals,100.0
+success_rate,65.5
+avg_profit,2.3
+avg_loss,-1.2
+profit_loss_ratio,1.92
+outcome_success,65.5
+outcome_failure,25.3
+outcome_partial,5.2
+outcome_expired,4.0

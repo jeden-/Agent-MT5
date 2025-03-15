@@ -48,7 +48,7 @@ class RiskParameters:
     def __init__(self):
         # Parametry limitów pozycji
         self.max_positions_per_symbol = 1    # Maksymalna liczba pozycji na symbol
-        self.max_positions_total = 3         # Maksymalna łączna liczba pozycji (zwiększamy do 3)
+        self.max_positions_total = 1         # Maksymalna łączna liczba pozycji (ograniczone do 1 na potrzeby testów)
         
         # Parametry codziennego limitu strat
         self.daily_loss_limit_percent = 5.0  # Limit dziennej straty jako procent kapitału

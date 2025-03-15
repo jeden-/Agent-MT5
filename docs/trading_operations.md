@@ -189,6 +189,48 @@ print(response.json())
 
 ### Python - zamykanie pozycji
 
+#### Metoda 1: Przez serwer HTTP i EA (zalecana)
+
+Ponieważ broker może blokować bezpośrednie zamykanie pozycji przez API MT5, zalecane jest użycie funkcji `patched_close_position` z modułu `src.utils.patches`, która wykorzystuje komunikację przez EA:
+
+```python
+from src.utils.patches import patched_close_position
+from src.mt5_bridge.mt5_connector import MT5Connector
+
+# Inicjalizacja połączenia z MT5
+mt5_connector = MT5Connector()
+mt5_connector.connect()
+
+# Zamknięcie pozycji o określonym numerze ticketu
+result = patched_close_position(mt5_connector, 123456789)
+
+if result:
+    print("Pozycja została zamknięta pomyślnie")
+else:
+    print("Nie udało się zamknąć pozycji")
+```
+
+Alternatywnie, można wywołać bezpośrednio endpoint HTTP poprzez `MT5ApiClient`:
+
+```python
+import requests
+import json
+from src.position_management.mt5_api_client import MT5ApiClient
+
+# Inicjalizacja klienta API
+api_client = MT5ApiClient(server_url="http://127.0.0.1:5555")
+
+# Zamknięcie pozycji
+result = api_client.close_position("EA_1741779470", 123456789)
+
+if result:
+    print("Pozycja została zamknięta pomyślnie")
+else:
+    print("Nie udało się zamknąć pozycji")
+```
+
+#### Metoda 2: Bezpośrednie wywołanie API HTTP
+
 ```python
 import requests
 import json
@@ -196,12 +238,60 @@ import json
 url = "http://127.0.0.1:5555/position/close"
 headers = {"Content-Type": "application/json"}
 data = {
-    "ea_id": "EA_12345",
+    "ea_id": "EA_1741779470",
     "ticket": 123456789
 }
 
 response = requests.post(url, headers=headers, data=json.dumps(data))
 print(response.json())
+```
+
+#### Metoda 3: Bezpośrednie API MT5 (może być blokowane przez brokera)
+
+```python
+import MetaTrader5 as mt5
+
+# Inicjalizacja połączenia z MT5
+if not mt5.initialize():
+    print("Inicjalizacja MT5 nie powiodła się")
+    quit()
+
+# Przygotowanie parametrów zamknięcia pozycji
+position = mt5.positions_get(ticket=123456789)[0]
+symbol = position.symbol
+volume = position.volume
+
+# Określenie kierunku zamknięcia (przeciwny do kierunku otwarcia)
+if position.type == mt5.POSITION_TYPE_BUY:
+    action = mt5.TRADE_ACTION_DEAL
+    order_type = mt5.ORDER_TYPE_SELL
+    price = mt5.symbol_info_tick(symbol).bid
+else:
+    action = mt5.TRADE_ACTION_DEAL
+    order_type = mt5.ORDER_TYPE_BUY
+    price = mt5.symbol_info_tick(symbol).ask
+
+# Przygotowanie żądania
+request = {
+    "action": action,
+    "symbol": symbol,
+    "volume": volume,
+    "type": order_type,
+    "position": 123456789,
+    "price": price,
+    "deviation": 20,
+    "magic": 234000,
+    "comment": "Zamknięcie pozycji",
+    "type_time": mt5.ORDER_TIME_GTC,
+    "type_filling": mt5.ORDER_FILLING_FOK,
+}
+
+# Próba zamknięcia pozycji
+result = mt5.order_send(request)
+print(result)
+
+# Zakończenie połączenia z MT5
+mt5.shutdown()
 ```
 
 ### Python - pobieranie informacji o koncie

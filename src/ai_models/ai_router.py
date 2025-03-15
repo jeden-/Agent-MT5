@@ -63,9 +63,9 @@ class AIRouter:
         # Ładowanie konfiguracji
         self.config = {}
         self.models_config = {
-            'claude': {'enabled': True, 'weight': 0.4},
+            'claude': {'enabled': True, 'weight': 0.7},
             'grok': {'enabled': True, 'weight': 0.3},
-            'deepseek': {'enabled': True, 'weight': 0.3}
+            'deepseek': {'enabled': False, 'weight': 0.0}
         }
         self.threshold_entry = 0.7  # Domyślny próg pewności dla wejścia w pozycję
         self.threshold_exit = 0.6   # Domyślny próg pewności dla wyjścia z pozycji
@@ -576,6 +576,44 @@ class AIRouter:
         
         return aggregated_result
     
+    def route_analysis(self, symbol: str, market_data: Dict[str, Any], model_name: str = "claude") -> Dict[str, Any]:
+        """
+        Kieruje analizę rynku do określonego modelu AI.
+        
+        Args:
+            symbol: Symbol instrumentu (np. 'EURUSD', 'GOLD')
+            market_data: Słownik zawierający dane rynkowe (open, high, low, close, itp.)
+            model_name: Nazwa modelu do użycia (claude, grok, deepseek)
+            
+        Returns:
+            Dict zawierający wyniki analizy
+        """
+        self.logger.info(f"Kierowanie analizy rynku {symbol} do modelu {model_name}")
+        
+        # Pobierz API dla wybranego modelu
+        api = self._get_api_for_model(model_name)
+        
+        if api is None:
+            self.logger.error(f"Nie znaleziono API dla modelu {model_name}")
+            return {
+                "success": False,
+                "error": f"Nieznany model: {model_name}",
+                "signal": "NONE",
+                "confidence": 0.0
+            }
+            
+        try:
+            # Wywołaj metodę analyze_market na wybranym API
+            result = api.analyze_market(symbol, market_data)
+            return result
+        except Exception as e:
+            self.logger.error(f"Błąd podczas analizy przez model {model_name}: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Błąd modelu {model_name}: {str(e)}",
+                "signal": "NONE",
+                "confidence": 0.0
+            }
 
 def get_ai_router() -> AIRouter:
     """

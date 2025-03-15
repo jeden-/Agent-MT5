@@ -4,10 +4,33 @@ Ten katalog zawiera interfejs użytkownika dla systemu AgentMT5, zbudowany przy 
 
 ## Funkcje
 
-- **Live Monitor**: Monitoring aktywnych połączeń i transakcji w czasie rzeczywistym
+- **Live Monitor**: 
+  - **Status Systemu**: Informacja o statusie połączenia, ostatniej aktywności i liczbie pozycji
+  - **Stan Konta**: Aktualne informacje z MT5 o saldzie, kapitale, depozycie i poziomie depozytu
+  - **Aktywne Pozycje**: Tabela zawierająca wszystkie otwarte pozycje z MT5
+  - **Historia Transakcji**: Historia zamkniętych transakcji
 - **Performance Dashboard**: Analiza wyników handlowych
 - **AI Analytics**: Analityka związana z modelami AI
 - **System Status**: Monitorowanie ogólnego stanu systemu
+
+## Sekcja Stan Konta
+
+Sekcja "Stan Konta" wyświetla następujące metryki z MT5:
+- **Saldo**: Aktualne saldo konta bez uwzględnienia otwartych pozycji
+- **Kapitał**: Całkowity kapitał konta, uwzględniający zysk/stratę z otwartych pozycji
+- **Depozyt**: Aktualna wartość depozytu zajętego przez otwarte pozycje
+- **Dostępny Depozyt**: Wartość depozytu dostępnego do wykorzystania
+- **Poziom Depozytu**: Procentowy stosunek kapitału do depozytu
+
+## Sekcja Aktywne Pozycje
+
+Tabela aktywnych pozycji wyświetla:
+- **Bilet**: Numer biletu transakcji w MT5
+- **Instrument**: Symbol instrumentu finansowego
+- **Typ**: Kierunek transakcji (BUY/SELL)
+- **Czas Otwarcia**: Data i czas otwarcia pozycji
+- **Wolumen**: Wielkość pozycji
+- **Zysk/Strata**: Aktualny wynik finansowy pozycji
 
 ## Lokalizacja
 

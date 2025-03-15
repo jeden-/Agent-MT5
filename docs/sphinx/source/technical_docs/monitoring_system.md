@@ -1,0 +1,69 @@
+# System Monitorowania AgentMT5
+
+System monitorowania AgentMT5 jest odpowiedzialny za śledzenie stanu aplikacji, zbieranie metryk, generowanie alertów i dostarczanie informacji o wydajności systemu. Zapewnia kompleksowe narzędzia do monitorowania działania systemu automatycznego handlu.
+
+## Struktura Systemu Monitorowania
+
+System monitorowania składa się z czterech głównych komponentów:
+
+1. **Monitoring Logger** - odpowiedzialny za rejestrowanie wszystkich zdarzeń i operacji w systemie.
+2. **Connection Tracker** - śledzi aktywne połączenia do Expert Advisors w MT5.
+3. **Alert Manager** - zarządza alertami generowanymi na podstawie określonych reguł.
+4. **Status Reporter** - generuje raporty o stanie systemu.
+
+## Komponenty Systemu
+
+### 1. Monitoring Logger (`monitoring_logger.py`)
+
+Komponent odpowiedzialny za logowanie zdarzeń w systemie. Zapewnia jednolity interfejs do rejestrowania zdarzeń o różnych poziomach ważności i typach operacji.
+
+Główne funkcje:
+- Rejestrowanie zdarzeń z różnymi poziomami (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Kategoryzowanie operacji według typów (INIT, OPEN_POSITION, CLOSE_POSITION, itp.)
+- Śledzenie statusu operacji (SUCCESS, FAILED, PENDING, itp.)
+- Filtrowanie i wyszukiwanie logów
+
+### 2. Connection Tracker (`connection_tracker.py`)
+
+Komponent śledzący aktywne połączenia Expert Advisors do serwera. Monitoruje stan każdego połączenia, rejestruje aktywność i wykrywa nieaktywne połączenia.
+
+Główne funkcje:
+- Rejestracja nowych połączeń EA
+- Aktualizacja aktywności EA
+- Śledzenie statusu połączeń
+- Wykrywanie nieaktywnych połączeń
+
+### 3. Alert Manager (`alert_manager.py`)
+
+Komponent zarządzający alertami w systemie. Definiuje reguły alertów, generuje alerty w oparciu o te reguły i zarządza ich cyklem życia.
+
+Główne funkcje:
+- Tworzenie i zarządzanie regułami alertów
+- Generowanie alertów w oparciu o reguły
+- Zarządzanie stanem alertów (nowy, potwierdzony, rozwiązany)
+- Automatyczne rozwiązywanie alertów po określonym czasie
+
+### 4. Status Reporter (`status_reporter.py`)
+
+Komponent generujący raporty o stanie systemu, zbierający metryki wydajności i dostarczający informacje o ogólnym stanie aplikacji.
+
+Główne funkcje:
+- Generowanie raportów o stanie systemu
+- Śledzenie metryk wydajności
+- Monitorowanie zasobów systemu (CPU, pamięć)
+- Okresowe zapisywanie raportów do pliku
+
+## Integracja z Serwerem HTTP
+
+System monitorowania jest zintegrowany z serwerem HTTP przez dodatkowe endpointy:
+
+1. **GET /monitoring/logs** - Pobieranie logów
+2. **GET /monitoring/connections** - Pobieranie informacji o połączeniach
+3. **GET /monitoring/alerts** - Pobieranie alertów
+4. **GET /monitoring/status** - Pobieranie statusu systemu
+5. **POST /monitoring/alerts/{alert_id}/acknowledge** - Potwierdzenie alertu
+6. **POST /monitoring/alerts/{alert_id}/resolve** - Rozwiązanie alertu
+
+## Testowanie
+
+Do testowania systemu monitorowania służy skrypt `scripts/test_monitoring.py`, który generuje przykładowe logi, połączenia, alerty i aktualizuje metryki wydajności. 

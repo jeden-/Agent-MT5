@@ -148,4 +148,70 @@ class PerformanceMetric:
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
     id: Optional[int] = None
-    created_at: datetime = field(default_factory=datetime.now) 
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class AIUsageRecord:
+    """Model dla rekordu użycia AI."""
+    model: str
+    operation: str
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cost: float = 0.0
+    response_time: float = 0.0
+    success: bool = True
+    error: str = ""
+    id: Optional[int] = None
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class MarketData:
+    """Model dla danych rynkowych."""
+    symbol: str
+    timeframe: str
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    tick_volume: int
+    spread: int = 0
+    real_volume: float = 0.0
+    id: Optional[int] = None
+    created_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class SignalEvaluation:
+    """Model dla oceny sygnału tradingowego."""
+    signal_id: str
+    symbol: str
+    timeframe: str
+    direction: str
+    entry_price: float
+    stop_loss: float
+    take_profit: float
+    max_profit: float
+    max_loss: float
+    exit_price: Optional[float] = None
+    actual_profit: Optional[float] = None
+    actual_loss: Optional[float] = None
+    realized_pips: Optional[float] = None
+    risk_reward_ratio: Optional[float] = None
+    hit_target: Optional[bool] = None
+    hit_stop: Optional[bool] = None
+    hit_neither: Optional[bool] = None
+    time_to_target: Optional[int] = None  # w sekundach
+    time_to_stop: Optional[int] = None  # w sekundach
+    price_movement_percentage: Optional[float] = None
+    profit_loss_ratio: Optional[float] = None
+    entry_time: datetime = field(default_factory=datetime.now)
+    exit_time: Optional[datetime] = None
+    evaluation_status: str = "open"  # open, closed, expired
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    confidence: float = 0.0
+    id: Optional[int] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now) 

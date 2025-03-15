@@ -49,7 +49,8 @@ class SignalValidator:
     _instance = None
     _lock = threading.Lock()
     
-    def __new__(cls):
+    @classmethod
+    def __new__(cls, *args, **kwargs):
         """Implementacja wzorca Singleton."""
         with cls._lock:
             if cls._instance is None:
@@ -57,7 +58,7 @@ class SignalValidator:
                 cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, config):
         """Inicjalizacja walidatora sygnałów."""
         if self._initialized:
             return
@@ -73,6 +74,10 @@ class SignalValidator:
         # Parametry konfiguracyjne
         self.config_manager = ConfigManager()
         self.config = self._load_config()
+        
+        # Aktualizujemy konfigurację z przekazanych parametrów
+        self.config.update(config)
+        self.logger.info("Zaktualizowano konfigurację z przekazanych parametrów")
         
         # Buforowanie ostatnich wyników walidacji
         self.validation_cache = {}

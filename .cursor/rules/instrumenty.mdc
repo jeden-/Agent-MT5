@@ -1,33 +1,32 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 Lista wybranych instrumentów do tradingu
 Na podstawie naszej wcześniejszej analizy, wybraliśmy następujące 5 najlepszych instrumentów do implementacji w naszym agencie tradingowym:
 
 Złoto (XAUUSD) - 87 punktów
-
 Dźwignia: 1:20
 Godziny handlu: Poniedziałek-Czwartek 00:00-23:00, Piątek 00:00-22:00
 Kluczowe zalety: Optymalna zmienność, silne reakcje na analizę techniczną, dobra przewidywalność
-GBP/USD - 84 punkty
 
+GBP/USD - 84 punkty
 Dźwignia: 1:30
 Godziny handlu: Poniedziałek-Piątek 00:00-21:59, Niedziela 23:05-24:00
 Kluczowe zalety: Wysoka dostępność handlowa, dobra zmienność, silne reakcje na dane fundamentalne
-US Tech 100 (NASDAQ) - 82 punkty
 
+US Tech 100 (NASDAQ) - 82 punkty
 Dźwignia: 1:20
 Godziny handlu: Poniedziałek-Czwartek 00:00-23:00, Piątek 00:00-22:00
 Kluczowe zalety: Najwyższa naturalna zmienność, wyraźne trendy, silne reakcje techniczne
-EUR/USD - 81 punktów
 
+EUR/USD - 81 punktów
 Dźwignia: 1:30
 Godziny handlu: Poniedziałek-Piątek 00:00-21:59, Niedziela 23:05-24:00
 Kluczowe zalety: Najwyższa płynność, niskie spready, dobrze reaguje na analizę techniczną
-Srebro (XAGUSD) - 78 punktów
 
+Srebro (XAGUSD) - 78 punktów
 Dźwignia: 1:20
 Godziny handlu: Poniedziałek-Czwartek 00:00-23:00, Piątek 00:00-22:00
 Kluczowe zalety: Wysoka zmienność, korelacja ze złotem ale z większymi ruchami

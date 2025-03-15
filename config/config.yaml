@@ -7,6 +7,15 @@ general:
   log_level: "INFO"
   timezone: "Europe/Warsaw"
 
+# Konfiguracja serwera MT5
+mt5_server:
+  host: "127.0.0.1"
+  port: 5555
+  api_base_url: "http://127.0.0.1:5555/mt5"
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  connection_timeout_seconds: 30
+
 # Ustawienia handlowe
 trading:
   symbols:
@@ -33,8 +42,8 @@ risk_management:
   max_position_size_percent: 1.0
   default_stop_loss_pips: 50
   default_take_profit_pips: 100
-  max_open_positions: 5
-  max_positions_per_symbol: 2
+  max_open_positions: 1
+  max_positions_per_symbol: 1
   trailing_stop:
     enabled: true
     activation_percent: 0.5
@@ -45,15 +54,15 @@ ai:
   models:
     claude:
       enabled: true
-      weight: 0.4
+      weight: 0.7
       timeout_seconds: 30
     grok:
       enabled: true
       weight: 0.3
       timeout_seconds: 20
     deepseek:
-      enabled: true
-      weight: 0.3
+      enabled: false
+      weight: 0.0
       timeout_seconds: 15
   threshold:
     entry: 0.75

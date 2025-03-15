@@ -391,6 +391,26 @@ class GrokAPI:
                 Odpowiedź w formacie JSON:"""
                 
         return prompt
+    
+    def analyze_market(self, symbol: str, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analizuje dane rynkowe dla danego symbolu.
+        
+        Args:
+            symbol: Symbol instrumentu (np. 'EURUSD', 'GOLD')
+            market_data: Słownik zawierający dane rynkowe (open, high, low, close, itp.)
+            
+        Returns:
+            Dict zawierający wyniki analizy
+        """
+        logger.info(f"Analiza rynku {symbol} z użyciem Grok")
+        
+        # Dodajemy symbol do danych rynkowych
+        market_data_with_symbol = market_data.copy()
+        market_data_with_symbol['symbol'] = symbol
+        
+        # Delegujemy do analyze_market_data
+        return self.analyze_market_data(market_data_with_symbol, "complete")
 
 
 def get_grok_api() -> GrokAPI:

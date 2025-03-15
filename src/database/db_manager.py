@@ -12,6 +12,7 @@ from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import DictCursor
 from contextlib import contextmanager
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Ustawienie loggera
 logger = logging.getLogger('trading_agent.database')
@@ -105,13 +106,13 @@ class DatabaseManager:
     @contextmanager
     def get_cursor(self, commit=False):
         """
-        Kontekstowy menedżer do uzyskiwania kursora dla pojedynczej operacji.
+        Kontekstowy menedżer do uzyskiwania i zwalniania kursora.
         
         Args:
-            commit (bool, optional): Czy automatycznie wykonać commit po operacji. Domyślnie False.
-        
+            commit: Czy automatycznie zatwierdzać zmiany (domyślnie: False)
+            
         Yields:
-            psycopg2.extras.DictCursor: Kursor bazy danych.
+            psycopg2.extensions.cursor: Kursor
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -119,12 +120,23 @@ class DatabaseManager:
                 yield cursor
                 if commit:
                     conn.commit()
-            except Exception as e:
-                conn.rollback()
-                logger.error(f"Błąd podczas operacji na bazie danych: {e}")
-                raise
             finally:
                 cursor.close()
+    
+    def test_connection(self):
+        """
+        Testuje połączenie z bazą danych.
+        
+        Returns:
+            bool: True jeśli połączenie działa, False w przeciwnym razie
+        """
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute("SELECT 1")
+                return True
+        except Exception as e:
+            logger.error(f"Błąd podczas testowania połączenia z bazą: {e}")
+            return False
     
     def execute_query(self, query, params=None, fetch=True, commit=True):
         """
@@ -145,6 +157,139 @@ class DatabaseManager:
             if fetch:
                 return cursor.fetchall()
             return None
+    
+    def get_latest_signals(self, limit=10):
+        """
+        Pobiera najnowsze sygnały handlowe z bazy danych.
+        
+        Args:
+            limit: Maksymalna liczba sygnałów do pobrania
+            
+        Returns:
+            List[TradingSignal]: Lista najnowszych sygnałów handlowych
+        """
+        from src.database.models import TradingSignal
+        
+        try:
+            query = """
+            SELECT * FROM trading_signals
+            ORDER BY created_at DESC
+            LIMIT %s
+            """
+            
+            results = self.execute_query(query, (limit,))
+            
+            # Jeśli nie ma wyników lub tabela nie istnieje, zwracamy pustą listę
+            if not results:
+                return []
+                
+            # Konwertujemy wyniki zapytania na obiekty TradingSignal
+            signals = []
+            for row in results:
+                signal = TradingSignal(
+                    id=row.get('id'),
+                    symbol=row.get('symbol'),
+                    timeframe=row.get('timeframe'),
+                    direction=row.get('direction'),
+                    entry_price=row.get('entry_price'),
+                    stop_loss=row.get('stop_loss'),
+                    take_profit=row.get('take_profit'),
+                    confidence=row.get('confidence', 0.0),
+                    status=row.get('status', 'pending'),
+                    ai_analysis=row.get('ai_analysis', ''),
+                    setup_id=row.get('setup_id'),
+                    execution_id=row.get('execution_id'),
+                    created_at=row.get('created_at'),
+                    updated_at=row.get('updated_at'),
+                    expired_at=row.get('expired_at')
+                )
+                signals.append(signal)
+                
+            return signals
+            
+        except Exception as e:
+            logger.error(f"Błąd podczas pobierania najnowszych sygnałów: {str(e)}")
+            return []
+    
+    def get_trading_signal_by_id(self, signal_id):
+        """
+        Pobiera sygnał handlowy na podstawie ID.
+        
+        Args:
+            signal_id: ID sygnału do pobrania
+            
+        Returns:
+            TradingSignal: Sygnał handlowy lub None, jeśli nie znaleziono
+        """
+        from src.database.models import TradingSignal
+        
+        try:
+            query = """
+            SELECT * FROM trading_signals
+            WHERE id = %s
+            """
+            
+            results = self.execute_query(query, (signal_id,))
+            
+            # Jeśli nie ma wyników, zwracamy None
+            if not results or len(results) == 0:
+                return None
+                
+            # Konwertujemy wynik zapytania na obiekt TradingSignal
+            row = results[0]
+            signal = TradingSignal(
+                id=row.get('id'),
+                symbol=row.get('symbol'),
+                timeframe=row.get('timeframe'),
+                direction=row.get('direction'),
+                entry_price=row.get('entry_price'),
+                stop_loss=row.get('stop_loss'),
+                take_profit=row.get('take_profit'),
+                confidence=row.get('confidence', 0.0),
+                status=row.get('status', 'pending'),
+                ai_analysis=row.get('ai_analysis', ''),
+                setup_id=row.get('setup_id'),
+                execution_id=row.get('execution_id'),
+                created_at=row.get('created_at'),
+                updated_at=row.get('updated_at'),
+                expired_at=row.get('expired_at')
+            )
+            
+            return signal
+            
+        except Exception as e:
+            logger.error(f"Błąd podczas pobierania sygnału o ID {signal_id}: {str(e)}")
+            return None
+            
+    def update_trading_signal(self, signal):
+        """
+        Aktualizuje sygnał handlowy w bazie danych.
+        
+        Args:
+            signal: Sygnał handlowy do zaktualizowania
+            
+        Returns:
+            bool: True, jeśli aktualizacja powiodła się, False w przeciwnym razie
+        """
+        try:
+            query = """
+            UPDATE trading_signals
+            SET status = %s, updated_at = %s
+            WHERE id = %s
+            """
+            
+            # Aktualizujemy tylko status i datę aktualizacji
+            self.execute_query(
+                query, 
+                (signal.status, datetime.now(), signal.id),
+                fetch=False
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Błąd podczas aktualizacji sygnału o ID {signal.id}: {str(e)}")
+            return False
     
     def create_tables(self):
         """Utworzenie wszystkich tabel w bazie danych."""
@@ -273,47 +418,54 @@ class DatabaseManager:
         logger.info("Tabele dla transakcji zostały utworzone")
     
     def _create_log_tables(self):
-        """Utworzenie tabel dla logów i monitoringu."""
-        with self.get_cursor(commit=True) as cursor:
-            # Tabela z logami systemu
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS system_logs (
-                    id SERIAL PRIMARY KEY,
-                    log_level VARCHAR(10) NOT NULL,
-                    message TEXT NOT NULL,
-                    component VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            ''')
-            
-            # Tabela ze statystykami AI
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS ai_stats (
-                    id SERIAL PRIMARY KEY,
-                    model VARCHAR(20) NOT NULL,
-                    query_type VARCHAR(50) NOT NULL,
-                    response_time NUMERIC(10, 3),
-                    tokens_used INTEGER,
-                    cost NUMERIC(10, 6),
-                    success BOOLEAN,
-                    error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            ''')
-            
-            # Tabela z metrykami wydajności
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS performance_metrics (
-                    id SERIAL PRIMARY KEY,
-                    metric_name VARCHAR(50) NOT NULL,
-                    metric_value NUMERIC(15, 6) NOT NULL,
-                    metric_unit VARCHAR(20),
-                    period_start TIMESTAMP,
-                    period_end TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            ''')
-        logger.info("Tabele dla logów i monitoringu zostały utworzone")
+        """Tworzy tabele dla logów i monitoringu."""
+        query = """
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            level VARCHAR(10) NOT NULL,
+            source VARCHAR(50) NOT NULL,
+            message TEXT NOT NULL,
+            details JSONB
+        );
+        
+        CREATE TABLE IF NOT EXISTS connection_logs (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            connection_type VARCHAR(20) NOT NULL,
+            details JSONB
+        );
+        
+        CREATE TABLE IF NOT EXISTS performance_metrics (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP NOT NULL,
+            metric_type VARCHAR(50) NOT NULL,
+            value FLOAT NOT NULL,
+            details JSONB
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp ON system_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_connection_logs_timestamp ON connection_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_performance_metrics_timestamp ON performance_metrics(timestamp);
+        """
+        
+        try:
+            self.execute_query(query)
+            logger.info("Tabele dla logów i monitoringu zostały utworzone")
+        except Exception as e:
+            logger.error(f"Błąd podczas tworzenia tabel dla logów: {e}")
+            raise
+
+
+def get_db_manager() -> DatabaseManager:
+    """
+    Zwraca instancję DatabaseManager (Singleton).
+    
+    Returns:
+        Instancja DatabaseManager
+    """
+    return DatabaseManager()
 
 
 # Przykład użycia:

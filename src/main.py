@@ -13,19 +13,21 @@ import logging
 import time
 from datetime import datetime
 import yaml
+import asyncio
 from dotenv import load_dotenv
 
 # Dodanie głównego katalogu projektu do PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Moduły aplikacji
-from src.database import DatabaseManager
-from src.mt5_bridge import TradingService
-from src.position_management import PositionManager
-from src.risk_management import RiskManager
-from src.analysis import SignalGenerator, SignalValidator, FeedbackLoop
-from src.trading_integration import TradingIntegration
-from src.utils import setup_logging
+# Import i konfiguracja systemu logowania
+from src.utils.logging_config import configure_logging, get_current_log_path
+
+# Konfiguracja loggera z zapisem do pliku
+configure_logging(log_level=logging.INFO)
+log_path = get_current_log_path()
+
+logger = logging.getLogger(__name__)
+logger.info(f"Logowanie skonfigurowane. Ścieżka do pliku logów: {log_path}")
 
 def load_config():
     """Wczytaj konfigurację z pliku YAML."""
@@ -37,103 +39,81 @@ def load_config():
         logging.error(f"Błąd podczas wczytywania konfiguracji: {e}")
         sys.exit(1)
 
-class TradingAgent:
-    """Główna klasa agenta handlującego."""
-    
-    def __init__(self):
-        """Inicjalizacja agenta."""
+async def main():
+    """Główna funkcja aplikacji."""
+    try:
         # Wczytanie zmiennych środowiskowych
         load_dotenv()
         
         # Wczytanie konfiguracji
-        self.config = load_config()
+        config = load_config()
         
-        # Konfiguracja logowania
-        self.logger = setup_logging()
-        self.logger.info("Inicjalizacja Trading Agent MT5")
+        # Aplikowanie łatek
+        from src.utils.patches import apply_all_patches
+        patch_results = apply_all_patches()
+        if not all(patch_results.values()):
+            logger.warning("Nie wszystkie łatki zostały pomyślnie zaaplikowane!")
         
-        # Status agenta
-        self.is_running = False
+        # Inicjalizacja systemu powiadomień
+        from src.notifications.init_notifications import init_notifications
+        if init_notifications():
+            logger.info("System powiadomień zainicjalizowany pomyślnie")
+        else:
+            logger.warning("Inicjalizacja systemu powiadomień zakończona z ostrzeżeniami")
         
-        # Komponenty
-        self.db_manager = None
-        self.trading_integration = None
-    
-    def initialize_components(self):
-        """Inicjalizacja wszystkich komponentów systemu."""
-        self.logger.info("Inicjalizacja komponentów systemu...")
+        # Import modułów systemu
+        # Ważne: Kolejność importów ma znaczenie, aby uniknąć cyklicznego importu
+        from src.mt5_bridge import start_server
+        from src.agent_controller import get_agent_controller
+        from src.scheduler import get_scheduler
         
-        # Inicjalizacja bazy danych
-        self.logger.info("Inicjalizacja połączenia z bazą danych...")
-        self.db_manager = DatabaseManager()
-        self.db_manager.connect()
+        # Uruchomienie serwera HTTP
+        host = config.get('server', {}).get('host', '127.0.0.1')
+        port = config.get('server', {}).get('port', 5555)
         
-        # Sprawdzenie struktury bazy danych
-        self.logger.info("Sprawdzanie struktury bazy danych...")
-        try:
-            self.db_manager.create_tables()
-            self.logger.info("Struktura bazy danych zweryfikowana")
-        except Exception as e:
-            self.logger.error(f"Błąd podczas weryfikacji struktury bazy danych: {e}", exc_info=True)
-            raise
+        logger.info(f"Uruchamianie serwera na {host}:{port}")
+        server = await start_server(host, port)
         
-        # Inicjalizacja integracji handlowej
-        self.logger.info("Inicjalizacja integracji handlowej...")
-        self.trading_integration = TradingIntegration()
+        # Inicjalizacja kontrolera agenta
+        logger.info("Inicjalizacja kontrolera agenta")
+        agent_controller = get_agent_controller()
         
-        self.logger.info("Inicjalizacja komponentów zakończona")
-    
-    def start(self):
-        """Uruchomienie agenta."""
-        self.logger.info("Uruchamianie Trading Agent MT5...")
+        # Ustawienie kontrolera agenta w serwerze
+        logger.info("Konfiguracja kontrolera agenta w serwerze")
+        server.set_agent_controller(agent_controller)
         
-        try:
-            self.initialize_components()
-            self.is_running = True
+        # Inicjalizacja i uruchomienie harmonogramu zadań
+        logger.info("Inicjalizacja harmonogramu zadań")
+        scheduler = get_scheduler()
+        scheduler.initialize_default_tasks()
+        logger.info("Uruchamianie harmonogramu zadań")
+        scheduler.start()
+        
+        # Uruchomienie agenta w trybie obserwacyjnym
+        if config.get('agent', {}).get('auto_start', False):
+            mode = config.get('agent', {}).get('mode', 'observation')
+            logger.info(f"Automatyczne uruchomienie agenta w trybie: {mode}")
+            agent_controller.start_agent(mode=mode)
+        
+        # Utrzymanie działania aplikacji
+        logger.info("Aplikacja uruchomiona. Naciśnij Ctrl+C, aby zakończyć.")
+        while True:
+            await asyncio.sleep(1)
             
-            # Uruchomienie integracji handlowej
-            if not self.trading_integration.start():
-                self.logger.error("Nie udało się uruchomić integracji handlowej")
-                raise RuntimeError("Błąd uruchamiania integracji handlowej")
-            
-            # Włączenie/wyłączenie automatycznego handlu na podstawie konfiguracji
-            auto_trading_enabled = self.config.get('auto_trading_enabled', False)
-            self.trading_integration.enable_trading(auto_trading_enabled)
-            
-            self.logger.info(f"Trading Agent MT5 uruchomiony (auto-trading: {'włączony' if auto_trading_enabled else 'wyłączony'})")
-            
-            # Główna pętla aplikacji
-            while self.is_running:
-                time.sleep(1)  # Czekamy na przerwanie przez użytkownika
-                
-        except KeyboardInterrupt:
-            self.logger.info("Otrzymano sygnał przerwania, zatrzymywanie agenta...")
-            self.stop()
-        except Exception as e:
-            self.logger.error(f"Błąd podczas działania agenta: {e}", exc_info=True)
-            self.stop()
-            raise
-    
-    def stop(self):
-        """Zatrzymanie agenta."""
-        self.logger.info("Zatrzymywanie Trading Agent MT5...")
-        
-        try:
-            # Zatrzymanie integracji handlowej
-            if self.trading_integration:
-                self.trading_integration.stop()
-            
-            # Zamknięcie połączenia z bazą danych
-            if self.db_manager:
-                self.db_manager.disconnect()
-            
-            self.is_running = False
-            self.logger.info("Trading Agent MT5 zatrzymany")
-            
-        except Exception as e:
-            self.logger.error(f"Błąd podczas zatrzymywania agenta: {e}", exc_info=True)
-
+    except KeyboardInterrupt:
+        logger.info("Zatrzymywanie aplikacji przez użytkownika...")
+    except Exception as e:
+        logger.error(f"Nieoczekiwany błąd: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Czyszczenie zasobów
+        logger.info("Czyszczenie zasobów...")
 
 if __name__ == "__main__":
-    agent = TradingAgent()
-    agent.start() 
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Błąd podczas uruchamiania aplikacji: {e}")
+        import traceback
+        traceback.print_exc() 

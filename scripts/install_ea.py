@@ -24,6 +24,11 @@ logging.basicConfig(
 
 logger = logging.getLogger("EA_Installer")
 
+# Stałe
+EA_SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src', 'mt5_ea')
+EA_FILENAME = 'simple_http_AgentMT5_EA.mq5'
+EA_TARGET_FOLDER = 'AgentMT5'
+
 def find_mt5_terminals():
     """Znajduje ścieżki do terminali MT5 zainstalowanych na komputerze."""
     terminals = []
@@ -101,10 +106,10 @@ def install_ea(mt5_path, source_dir):
         
         # Kopiujemy pliki EA
         ea_files = {
-            'AgentMT5_EA.mq5': os.path.join(source_dir, 'src', 'mt5_ea', 'AgentMT5_EA.mq5'),
-            'Communication.mqh': os.path.join(source_dir, 'src', 'mt5_ea', 'Communication.mqh'),
-            'ErrorHandler.mqh': os.path.join(source_dir, 'src', 'mt5_ea', 'ErrorHandler.mqh'),
-            'Logger.mqh': os.path.join(source_dir, 'src', 'mt5_ea', 'Logger.mqh')
+            EA_FILENAME: os.path.join(source_dir, EA_SRC_DIR, EA_FILENAME),
+            'Communication.mqh': os.path.join(source_dir, EA_SRC_DIR, 'Communication.mqh'),
+            'ErrorHandler.mqh': os.path.join(source_dir, EA_SRC_DIR, 'ErrorHandler.mqh'),
+            'Logger.mqh': os.path.join(source_dir, EA_SRC_DIR, 'Logger.mqh')
         }
         
         for dest_name, source_path in ea_files.items():
@@ -118,7 +123,7 @@ def install_ea(mt5_path, source_dir):
         logger.info(f"Pliki EA zostały zainstalowane w: {experts_path}")
         logger.info("Teraz musisz skompilować EA w MetaEditor!")
         logger.info("1. Uruchom MetaEditor (F4 w MT5)")
-        logger.info("2. Otwórz plik AgentMT5_EA.mq5")
+        logger.info("2. Otwórz plik simple_http_AgentMT5_EA.mq5")
         logger.info("3. Skompiluj projekt (F7)")
         
         return True

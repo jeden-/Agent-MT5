@@ -1,9 +1,8 @@
 """
-Moduł do komunikacji z platformą MetaTrader 5
+Moduł mostka komunikacyjnego między systemem a platformą MT5.
 """
 
-from .mt5_connector import MT5Connector
+from .server import MT5Server, start_server
 from .trading_service import TradingService
-from .mt5_server import MT5Server
 
-__all__ = ['MT5Connector', 'TradingService', 'MT5Server'] 
+__all__ = ['MT5Server', 'start_server', 'TradingService'] 

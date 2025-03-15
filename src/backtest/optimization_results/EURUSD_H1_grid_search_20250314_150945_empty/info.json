@@ -1,0 +1,11 @@
+{
+    "status": "empty",
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "start_date": "2024-09-14T15:09:38.856060",
+    "end_date": "2025-03-13T15:09:38.856060",
+    "method": "grid_search",
+    "evaluation_metric": "sharpe_ratio",
+    "message": "Brak wa\u017cnych wynik\u00f3w optymalizacji",
+    "timestamp": "2025-03-14T15:09:45.098490"
+}

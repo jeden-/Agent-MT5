@@ -25,7 +25,7 @@ logger.setLevel(logging.INFO)
 
 # Parametry połączenia z lokalnym Ollama
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
-DEFAULT_MODEL = "deepseek-coder"
+DEFAULT_MODEL = "deepseek-r1:1.5b"
 
 
 class DeepSeekAPI:
@@ -52,8 +52,8 @@ class DeepSeekAPI:
         self.logger = logging.getLogger("DeepSeekAPI")
         
         # Domyślne parametry
-        self.model = "deepseek-coder"  # Domyślny model
-        self.max_tokens = 2000
+        self.model = "deepseek-r1:1.5b"  # Domyślny model - mniejszy i szybszy
+        self.max_tokens = 500  # Zmniejszona liczba tokenów dla mniejszego modelu
         self.temperature = 0.7
         self.top_p = 0.95
         self.frequency_penalty = 0
@@ -68,16 +68,20 @@ class DeepSeekAPI:
                 
                 if deepseek_models:
                     self.logger.info(f"Znaleziono modele DeepSeek w Ollama: {deepseek_models}\n")
-                    self.model = deepseek_models[0]  # Używamy pierwszego znalezionego modelu DeepSeek
+                    # Priorytetyzujemy mniejszy model, jeśli jest dostępny
+                    if "deepseek-r1:1.5b" in deepseek_models:
+                        self.model = "deepseek-r1:1.5b"
+                    else:
+                        self.model = deepseek_models[0]  # Używamy pierwszego znalezionego modelu DeepSeek
                 else:
                     self.logger.warning("Nie znaleziono modeli DeepSeek w Ollama")
-                    self.logger.info("Używanie domyślnego modelu: deepseek-coder")
+                    self.logger.info("Używanie domyślnego modelu: deepseek-r1:1.5b")
             else:
                 self.logger.warning(f"Błąd podczas sprawdzania dostępnych modeli: {response.status_code}")
                 
         except requests.exceptions.RequestException as e:
             self.logger.warning("Nie można połączyć się z lokalnym Ollama")
-            self.logger.info("Używanie domyślnego modelu: deepseek-coder")
+            self.logger.info("Używanie domyślnego modelu: deepseek-r1:1.5b")
         
         self.logger.info(f"Zainicjalizowano DeepSeekAPI z modelem {self.model}\n")
         self._initialized = True
@@ -152,7 +156,7 @@ class DeepSeekAPI:
                 response = requests.post(
                     "http://localhost:11434/api/generate",
                     headers=headers,
-                    json=json.dumps(data)
+                    json=data  # Przekazujemy bezpośrednio słownik Pythona, zamiast serializowanego JSONa
                 )
                 
                 elapsed_time = time.time() - start_time
@@ -557,6 +561,26 @@ Upewnij się, że decyzja jest zgodna z podanymi parametrami ryzyka i obecną sy
 Zwróć odpowiedź w poprawnym formacie JSON."""
 
         return prompt
+
+    def analyze_market(self, symbol: str, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analizuje dane rynkowe dla danego symbolu.
+        
+        Args:
+            symbol: Symbol instrumentu (np. 'EURUSD', 'GOLD')
+            market_data: Słownik zawierający dane rynkowe (open, high, low, close, itp.)
+            
+        Returns:
+            Dict zawierający wyniki analizy
+        """
+        logger.info(f"Analiza rynku {symbol} z użyciem DeepSeek")
+        
+        # Dodajemy symbol do danych rynkowych
+        market_data_with_symbol = market_data.copy()
+        market_data_with_symbol['symbol'] = symbol
+        
+        # Delegujemy do analyze_market_data
+        return self.analyze_market_data(market_data_with_symbol, "complete")
 
 
 def get_deepseek_api() -> DeepSeekAPI:

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import socket
 import subprocess
+import argparse
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -84,8 +85,150 @@ try:
 except Exception as e:
     logger.error(f"Błąd podczas aplikowania łatek systemowych: {e}")
 
+async def run_backtest(args):
+    """Uruchamia moduł backtestingu z podanymi argumentami."""
+    try:
+        from src.backtest.backtest_engine import BacktestEngine, BacktestConfig
+        from src.backtest.strategy import (
+            TradingStrategy, SimpleMovingAverageStrategy, 
+            RSIStrategy, BollingerBandsStrategy, MACDStrategy,
+            CombinedIndicatorsStrategy, StrategyConfig
+        )
+        from src.backtest.backtest_metrics import generate_report
+        from datetime import datetime, timedelta
+        import pandas as pd
+        
+        # Parsowanie parametrów backtestingu
+        symbol = args.symbol or "EURUSD"
+        timeframe = args.timeframe or "H1"
+        days = args.days or 30
+        strategy_name = args.strategy or "SMA"
+        
+        logger.info(f"Uruchamianie backtestingu dla {symbol} na timeframe {timeframe}, ostatnie {days} dni")
+        logger.info(f"Wybrana strategia: {strategy_name}")
+        
+        # Przygotowanie dat
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Konfiguracja backtestingu
+        config = BacktestConfig(
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            initial_balance=10000.0,
+            position_size_pct=1.0,
+            commission=0.0001,
+            slippage=0.0,
+            use_spread=True,
+            min_volume=0.01,
+            max_volume=10.0,
+            strategy_name=strategy_name,
+            use_cache=True,
+            update_cache=True,
+            output_dir="backtest_results"
+        )
+        
+        # Przygotowanie parametrów strategii
+        strategy_params = {}
+        if strategy_name == "SMA":
+            strategy_params = {"fast_period": 10, "slow_period": 30}
+        elif strategy_name == "RSI":
+            strategy_params = {"rsi_period": 14, "oversold": 30, "overbought": 70}
+        elif strategy_name == "BB":
+            strategy_params = {"period": 20, "std_dev": 2.0}
+        elif strategy_name == "MACD":
+            strategy_params = {"fast_period": 12, "slow_period": 26, "signal_period": 9}
+        
+        # Konfiguracja strategii
+        strategy_config = StrategyConfig(
+            stop_loss_pips=50,
+            take_profit_pips=100,
+            position_size_pct=1.0,
+            params=strategy_params
+        )
+        
+        # Wybór strategii
+        if strategy_name == "SMA":
+            strategy = SimpleMovingAverageStrategy(config=strategy_config)
+        elif strategy_name == "RSI":
+            strategy = RSIStrategy(config=strategy_config)
+        elif strategy_name == "BB":
+            strategy = BollingerBandsStrategy(config=strategy_config)
+        elif strategy_name == "MACD":
+            strategy = MACDStrategy(config=strategy_config)
+        elif strategy_name == "COMBINED":
+            strategy = CombinedIndicatorsStrategy(config=strategy_config)
+        else:
+            logger.error(f"Nieznana strategia: {strategy_name}")
+            return
+        
+        # Inicjalizacja silnika backtestingu
+        engine = BacktestEngine(config=config, strategy=strategy)
+        
+        # Uruchomienie backtestingu
+        logger.info("Rozpoczęcie backtestingu...")
+        
+        try:
+            result = engine.run()
+            
+            # Generowanie raportu tylko jeśli backtest się powiódł
+            if result and hasattr(result, 'metrics') and result.metrics:
+                logger.info("Generowanie raportu...")
+                
+                try:
+                    # Upewnij się, że katalog wynikowy istnieje
+                    import os
+                    os.makedirs("backtest_results", exist_ok=True)
+                    
+                    output_path = f"backtest_results/{strategy_name}_{symbol}_{timeframe}_{days}days_report.html"
+                    report_path = generate_report(result, output_path)
+                    
+                    logger.info(f"Backtest zakończony pomyślnie. Raport wygenerowany: {report_path}")
+                    
+                    # Wyświetlenie podstawowych statystyk
+                    logger.info("\n=== PODSTAWOWE STATYSTYKI ===")
+                    logger.info(f"Zysk/strata: {result.metrics['net_profit']:.2f} ({result.metrics['profit_factor']:.2f}x)")
+                    logger.info(f"Drawdown: {result.metrics['max_drawdown_pct']:.2f}%")
+                    logger.info(f"Liczba transakcji: {result.metrics['total_trades']}")
+                    logger.info(f"Procent wygranych: {result.metrics['win_rate']*100:.2f}%")
+                except Exception as e:
+                    logger.error(f"Błąd podczas generowania raportu: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+            else:
+                logger.warning("Backtest nie zwrócił ważnych wyników, raport nie został wygenerowany.")
+                
+            return result
+        except Exception as e:
+            logger.error(f"Błąd podczas wykonywania backtestingu: {e}")
+            logger.error("Spróbuj użyć innych parametrów lub innej pary walutowej.")
+            return None
+        
+    except Exception as e:
+        logger.error(f"Błąd podczas uruchamiania backtestingu: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
 async def main():
     """Główna funkcja startowa systemu."""
+    # Parsowanie argumentów wiersza poleceń
+    parser = argparse.ArgumentParser(description="AgentMT5 - System autonomicznego handlu")
+    parser.add_argument('--backtest', action='store_true', help='Uruchom moduł backtestingu')
+    parser.add_argument('--symbol', type=str, help='Symbol instrumentu dla backtestingu (np. EURUSD)')
+    parser.add_argument('--timeframe', type=str, help='Timeframe dla backtestingu (np. H1, M15)')
+    parser.add_argument('--days', type=int, help='Liczba dni dla backtestingu')
+    parser.add_argument('--strategy', type=str, help='Strategia dla backtestingu (SMA, RSI, BB, MACD, COMBINED)')
+    
+    args = parser.parse_args()
+    
+    # Jeśli wybrano tryb backtestingu
+    if args.backtest:
+        logger.info("Uruchamianie w trybie backtestingu")
+        await run_backtest(args)
+        return
+    
     try:
         # Import komponentów systemu
         from src.mt5_bridge.server import create_server

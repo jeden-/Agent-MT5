@@ -1,0 +1,35 @@
+http_server:
+  host: localhost
+  port: 8080
+
+trading:
+  max_positions: 1000
+  default_volume: 0.01
+  risk_percent: 1.0
+  symbols:
+    - EURUSD
+    - GBPUSD
+    - USDJPY
+    - AUDUSD
+    - USDCHF
+  timeframes:
+    - M1
+    - M5
+    - M15
+    - H1
+
+monitoring:
+  log_level: INFO
+  performance_metrics: true
+  log_file: logs/performance_tests.log
+
+performance:
+  http_server:
+    max_response_time: 0.1  # sekundy
+    min_requests_per_second: 50
+    max_std_dev_ratio: 0.5
+  trading:
+    min_success_rate: 0.95
+    min_operations_per_second: 10
+    min_updates_per_second: 100
+    min_candles_per_second: 10000 

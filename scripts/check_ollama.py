@@ -28,12 +28,12 @@ OLLAMA_PULL_URL = f"{OLLAMA_API_URL}/pull"
 
 # Lista obsługiwanych modeli DeepSeek
 SUPPORTED_MODELS = [
-    "deepseek-coder",      # Model podstawowy do pracy z kodem
+    "deepseek-r1:8b",      # Model podstawowy do pracy z kodem
     "deepseek-instruct",   # Model do zadań ogólnych
     "deepseek-llm"         # Podstawowy model językowy
 ]
 
-RECOMMENDED_MODEL = "deepseek-coder"
+RECOMMENDED_MODEL = "deepseek-r1:8b"
 
 def check_ollama_running() -> Tuple[bool, Optional[str]]:
     """

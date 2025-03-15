@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 # Importy wewnętrzne
-from src.mt5_bridge.mt5_client import MT5Client, get_mt5_client
+from src.mt5_bridge.mt5_connector import MT5Connector
 from src.database.market_data_repository import MarketDataRepository, get_market_data_repository
 
 # Konfiguracja loggera
@@ -49,7 +49,7 @@ class MarketDataProcessor:
         self.logger.info("Inicjalizacja MarketDataProcessor")
         
         # Inicjalizacja klientów
-        self.mt5_client = get_mt5_client()
+        self.mt5_client = MT5Connector()
         self.market_data_repository = get_market_data_repository()
         
         # Parametry konfiguracyjne
@@ -95,29 +95,58 @@ class MarketDataProcessor:
     def get_market_data(self, symbol: str, timeframe: str = "M15", 
                       num_bars: int = 100) -> Dict[str, Any]:
         """
-        Pobiera dane rynkowe dla danego symbolu i przedziału czasowego.
+        Pobiera dane rynkowe dla podanego symbolu i timeframe'u.
         
         Args:
             symbol: Symbol instrumentu (np. "EURUSD")
-            timeframe: Przedział czasowy (np. "M1", "M5", "M15", "H1", "D1")
+            timeframe: Interwał czasowy (np. "M15")
             num_bars: Liczba świec do pobrania
             
         Returns:
-            Dict zawierający dane rynkowe
+            Dict zawierający przetworzone dane rynkowe
         """
+        self.logger.debug(f"Pobieranie danych dla {symbol} na timeframe {timeframe}, {num_bars} świec")
+        
+        # Sprawdź cache
+        cached_data = self._get_cached_data(symbol, timeframe, num_bars)
+        if cached_data:
+            self.logger.debug(f"Zwracam dane z cache dla {symbol} {timeframe}")
+            return cached_data
+        
         try:
-            self.logger.info(f"Pobieranie danych dla {symbol} ({timeframe}), {num_bars} świec")
+            # Określenie zakresu czasowego na podstawie timeframe i liczby świec
+            end_time = datetime.now()
             
-            # Próba pobrania z bazy danych
-            cached_data = self._get_cached_data(symbol, timeframe, num_bars)
-            if cached_data is not None:
-                self.logger.info(f"Znaleziono dane w cache dla {symbol} ({timeframe})")
-                return cached_data
+            # Określenie jednostki czasu
+            if timeframe.startswith('M'):
+                # Minutowe timeframe'y
+                minutes = int(timeframe[1:])
+                start_time = end_time - timedelta(minutes=minutes * num_bars)
+            elif timeframe.startswith('H'):
+                # Godzinowe timeframe'y
+                hours = int(timeframe[1:])
+                start_time = end_time - timedelta(hours=hours * num_bars)
+            elif timeframe == 'D1':
+                # Dzienny timeframe
+                start_time = end_time - timedelta(days=num_bars)
+            elif timeframe == 'W1':
+                # Tygodniowy timeframe
+                start_time = end_time - timedelta(weeks=num_bars)
+            else:
+                # Domyślnie zakładamy M15
+                start_time = end_time - timedelta(minutes=15 * num_bars)
             
-            # Pobranie danych z MT5
-            ohlc_data = self.mt5_client.get_ohlc_data(symbol, timeframe, num_bars)
+            # Pobierz dane OHLC z określonymi parametrami czasu
+            ohlc_data = self.mt5_client.get_historical_data(
+                symbol=symbol, 
+                timeframe=timeframe, 
+                start_time=start_time,
+                end_time=end_time
+            )
+            
             if ohlc_data is None or len(ohlc_data) == 0:
-                raise ValueError(f"Brak danych dla {symbol} ({timeframe})")
+                self.logger.warning(f"Nie udało się pobrać danych dla {symbol} na timeframe {timeframe}")
+                return {}
             
             # Konwersja do DataFrame
             df = pd.DataFrame(ohlc_data)
@@ -192,10 +221,10 @@ class MarketDataProcessor:
             Dict zawierający aktualny stan rynku
         """
         try:
-            # Pobieranie aktualnego ticku
-            tick = self.mt5_client.get_current_tick(symbol)
-            if tick is None:
-                raise ValueError(f"Brak danych tick dla {symbol}")
+            # Pobieranie aktualnego stanu symbolu
+            symbol_info = self.mt5_client.get_symbol_info(symbol)
+            if symbol_info is None:
+                raise ValueError(f"Brak danych dla symbolu {symbol}")
             
             # Pobieranie danych z różnych przedziałów czasowych
             timeframe_data = self.get_multiple_timeframes(symbol)
@@ -212,9 +241,9 @@ class MarketDataProcessor:
                 "symbol": symbol,
                 "timestamp": datetime.now().isoformat(),
                 "current_price": {
-                    "bid": tick.get("bid", 0),
-                    "ask": tick.get("ask", 0),
-                    "mid": (tick.get("bid", 0) + tick.get("ask", 0)) / 2
+                    "bid": symbol_info.get("bid", 0),
+                    "ask": symbol_info.get("ask", 0),
+                    "mid": (symbol_info.get("bid", 0) + symbol_info.get("ask", 0)) / 2
                 },
                 "daily_change": self._calculate_daily_change(symbol),
                 "indicators": indicators,

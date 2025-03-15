@@ -23,7 +23,7 @@ class TestDeepSeekAPI(unittest.TestCase):
         self.mock_requests_get.return_value.status_code = 200
         self.mock_requests_get.return_value.json.return_value = {
             "models": [
-                {"name": "deepseek-coder"},
+                {"name": "deepseek-r1:8b"},
                 {"name": "other-model"}
             ]
         }

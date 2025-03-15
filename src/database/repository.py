@@ -8,6 +8,7 @@ Repozytorium dla operacji CRUD na tabelach bazy danych.
 import logging
 from typing import List, Optional, Dict, Any, TypeVar, Generic, Type
 from datetime import datetime
+import json
 
 from .db_manager import DatabaseManager
 from .models import (
@@ -53,6 +54,11 @@ class Repository(Generic[T]):
             # Konwersja dataclass do słownika (bez pól None)
             entity_dict = {k: v for k, v in entity.__dict__.items() if v is not None and k != 'id'}
             
+            # Konwersja słowników na JSON
+            for key, value in entity_dict.items():
+                if isinstance(value, dict):
+                    entity_dict[key] = json.dumps(value)
+            
             # Budowa zapytania
             columns = ', '.join(entity_dict.keys())
             placeholders = ', '.join(['%s'] * len(entity_dict))
@@ -71,6 +77,8 @@ class Repository(Generic[T]):
             return None
         except Exception as e:
             logger.error(f"Błąd podczas dodawania rekordu do {self.table_name}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
     
     def update(self, entity: T) -> Optional[T]:
@@ -84,6 +92,8 @@ class Repository(Generic[T]):
             Zaktualizowany model lub None w przypadku błędu
         """
         try:
+            import json
+            
             entity_id = getattr(entity, 'id', None)
             if entity_id is None:
                 logger.error(f"Nie można zaktualizować rekordu bez ID w tabeli {self.table_name}")
@@ -91,6 +101,11 @@ class Repository(Generic[T]):
             
             # Konwersja dataclass do słownika (bez pól None i bez id)
             entity_dict = {k: v for k, v in entity.__dict__.items() if v is not None and k != 'id'}
+            
+            # Konwersja słowników na JSON
+            for key, value in entity_dict.items():
+                if isinstance(value, dict):
+                    entity_dict[key] = json.dumps(value)
             
             # Dodanie pola updated_at jeśli istnieje w modelu
             if hasattr(entity, 'updated_at'):
@@ -114,6 +129,8 @@ class Repository(Generic[T]):
             return None
         except Exception as e:
             logger.error(f"Błąd podczas aktualizacji rekordu w {self.table_name}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
     
     def delete(self, entity_id: int) -> bool:

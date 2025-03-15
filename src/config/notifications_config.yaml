@@ -1,0 +1,25 @@
+discord:
+  avatar_url: null
+  enabled: false
+  username: AgentMT5-Test
+  webhook_url: https://discord.com/api/webhooks/test
+email:
+  enabled: false
+  password: test-password
+  recipient_emails:
+  - recipient@test.com
+  sender_email: agentmt5@test.com
+  smtp_port: 587
+  smtp_server: smtp.test.com
+  use_ssl: false
+  use_tls: true
+  username: test@example.com
+enabled_notification_types:
+- new_signal
+- signal_executed
+- error
+- warning
+general:
+  include_ai_analysis: true
+  include_charts: false
+  max_analysis_length: 500

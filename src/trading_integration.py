@@ -113,7 +113,7 @@ class TradingIntegration:
             current_positions = self.position_manager.get_positions()
             
             # Sprawdź limity pozycji dla symbolu
-            symbol_positions = [p for p in current_positions if p.get('symbol') == signal.symbol]
+            symbol_positions = [p for p in current_positions if p.symbol == signal.symbol]
             if len(symbol_positions) >= self.risk_manager.parameters.max_positions_per_symbol:
                 logger.warning(f"Przekroczony limit pozycji dla symbolu {signal.symbol}: "
                              f"{len(symbol_positions)}/{self.risk_manager.parameters.max_positions_per_symbol}")

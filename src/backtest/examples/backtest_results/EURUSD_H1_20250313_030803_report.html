@@ -1,0 +1,96 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Raport backtestingu: EURUSD H1</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1, h2 { color: #333; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .chart-container { margin: 20px 0; }
+            .section { margin-bottom: 30px; }
+        </style>
+    </head>
+    <body>
+        <h1>Raport backtestingu: EURUSD H1</h1>
+        
+        <div class="section">
+            <h2>Konfiguracja</h2>
+            <table>
+                <tr><th>Parametr</th><th>Wartość</th></tr>
+                <tr><td>Symbol</td><td>EURUSD</td></tr>
+                <tr><td>Timeframe</td><td>H1</td></tr>
+                <tr><td>Okres</td><td>2025-02-11 do 2025-03-13</td></tr>
+                <tr><td>Saldo początkowe</td><td>10000.00</td></tr>
+                <tr><td>Rozmiar pozycji (%)</td><td>1.00%</td></tr>
+                <tr><td>Prowizja</td><td>0.0 punktów</td></tr>
+                <tr><td>Poślizg</td><td>2.0 punktów</td></tr>
+                <tr><td>Uwzględnienie spreadu</td><td>Tak</td></tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Podsumowanie wyników</h2>
+            <table>
+                <tr><th>Metryka</th><th>Wartość</th></tr>
+                <tr><td>Zysk netto</td><td>0.00 (0.00%)</td></tr>
+                <tr><td>Liczba transakcji</td><td>0</td></tr>
+                <tr><td>Transakcje zyskowne</td><td>0 (0.00%)</td></tr>
+                <tr><td>Transakcje stratne</td><td>0</td></tr>
+                <tr><td>Średni zysk</td><td>0.00</td></tr>
+                <tr><td>Średnia strata</td><td>0.00</td></tr>
+                <tr><td>Największy zysk</td><td>0.00</td></tr>
+                <tr><td>Największa strata</td><td>0.00</td></tr>
+                <tr><td>Współczynnik zysku</td><td>0.00</td></tr>
+                <tr><td>Stosunek zysku do ryzyka</td><td>0.00</td></tr>
+                <tr><td>Maksymalny drawdown</td><td>0.00%</td></tr>
+                <tr><td>Sharpe Ratio</td><td>0.00</td></tr>
+                <tr><td>Zmienność</td><td>0.00%</td></tr>
+                <tr><td>Średni czas trwania transakcji</td><td>0.00 godz.</td></tr>
+                <tr><td>Oczekiwana wartość</td><td>0.00</td></tr>
+            </table>
+        </div>
+        
+        <div class="section">
+            <h2>Analiza kierunkowa</h2>
+            <table>
+                <tr><th>Metryka</th><th>Wartość</th></tr>
+                <tr><td>Liczba transakcji BUY</td><td>0</td></tr>
+                <tr><td>Liczba transakcji SELL</td><td>0</td></tr>
+                <tr><td>Skuteczność BUY</td><td>0.00%</td></tr>
+                <tr><td>Skuteczność SELL</td><td>0.00%</td></tr>
+            </table>
+        </div>
+        
+        <div class="chart-container">
+            <h2>Wykresy</h2>
+            <img src="backtest_results/EURUSD_H1_20250313_030803_charts.png" alt="Wykresy backtestingu" style="width: 100%;">
+        </div>
+        
+        <div class="section">
+            <h2>Informacje o transakcjach</h2>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Symbol</th>
+                    <th>Kierunek</th>
+                    <th>Wejście</th>
+                    <th>Wyjście</th>
+                    <th>Cena wejścia</th>
+                    <th>Cena wyjścia</th>
+                    <th>SL</th>
+                    <th>TP</th>
+                    <th>Wolumen</th>
+                    <th>Zysk/Strata</th>
+                    <th>Pipsy</th>
+                    <th>Powód zamknięcia</th>
+                </tr>
+    
+            </table>
+        </div>
+    </body>
+    </html>
+    
