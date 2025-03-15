@@ -186,6 +186,10 @@ Ten dokument zawiera szczegółowy plan wdrożenia funkcjonalności backtestingu
   - [x] Zachowanie parametrów i wyników między trybami
   - [x] Łatwiejsza ścieżka edukacyjna dla początkujących użytkowników
 - [x] Dokumentacja obu trybów w dokumentacji technicznej
+- [x] Pełna integracja z głównym generatorem sygnałów:
+  - [x] Używanie strategii CombinedIndicatorsStrategy jako domyślnej
+  - [x] Synchronizacja parametrów z głównym systemem
+  - [x] Opcja "Użyj dokładnie tych samych parametrów co system produkcyjny"
 
 ## Plan na najbliższy czas (15.03.2024-20.03.2024)
 
@@ -215,7 +219,7 @@ Ten dokument zawiera szczegółowy plan wdrożenia funkcjonalności backtestingu
 | 7.1 | Dokumentacja | 3 dni | 02.04.2024 | 04.04.2024 | ZAKOŃCZONY ✅ |
 | 7.2 | Wdrożenie produkcyjne | 3 dni | 15.03.2024 | 20.03.2024 | DO ZROBIENIA ❌ |
 
-## Aktualny stan (14.03.2024): Dokumentacja i integracja z UI zakończone
+## Aktualny stan (15.03.2024): Pełna integracja z systemem AgentMT5 zakończona
 
 ### Zaimplementowane komponenty
 - ✅ Klasa `HistoricalDataManager` do zarządzania danymi historycznymi z testami jednostkowymi
@@ -232,6 +236,7 @@ Ten dokument zawiera szczegółowy plan wdrożenia funkcjonalności backtestingu
 - ✅ Dokumentacja techniczna i użytkownika
 - ✅ Implementacja dwóch trybów backtestingu (automatyczny i zaawansowany)
 - ✅ Automatyczna analiza warunków rynkowych w module `MarketAnalyzer`
+- ✅ Pełna integracja z głównym generatorem sygnałów i synchronizacja parametrów
 
 ### Pozostałe zadania
 - ❌ Optymalizacja końcowa i refaktoryzacja kodu

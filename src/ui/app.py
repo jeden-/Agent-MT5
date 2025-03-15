@@ -2381,325 +2381,266 @@ def render_backtesting_tab():
             """)
 
 def render_auto_backtest_interface():
-    """Renderuje uproszczony interfejs dla automatycznego backtestingu"""
-    st.header("Automatyczny Backtest")
-    st.markdown("Wybierz podstawowe parametry, a system automatycznie dobierze optymalną strategię i ustawienia.")
+    """Renderuje interfejs automatycznego backtestingu dla początkujących użytkowników."""
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Wybór instrumentu
-        instrument = st.selectbox("Instrument", ["EURUSD", "GBPUSD", "USDJPY", "GOLD", "SILVER"], 
-                                key="auto_instrument")
-        
-        # Predefiniowane okresy czasowe
-        period_options = {
-            "Ostatni miesiąc": 30,
-            "Ostatnie 3 miesiące": 90,
-            "Ostatnie 6 miesięcy": 180,
-            "Ostatni rok": 365
-        }
-        selected_period = st.selectbox("Okres analizy", list(period_options.keys()), 
-                                     key="auto_period")
-        days = period_options[selected_period]
-        
-        # Daty są obliczane automatycznie
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=days)
-        
-        st.write(f"Zakres dat: {start_date} do {end_date}")
-        
-        # Timeframe (dodane)
-        timeframe = st.selectbox("Timeframe", ["M15", "M30", "H1", "H4"], index=2, key="auto_timeframe")
-    
-    with col2:
-        # Kapitał początkowy
-        capital = st.number_input("Kapitał początkowy", min_value=1000, value=10000, 
-                                key="auto_capital")
-        
-        # Profil ryzyka
-        risk_profile = st.select_slider(
-            "Profil ryzyka",
-            options=["Konserwatywny", "Zrównoważony", "Agresywny"],
-            value="Zrównoważony",
-            key="auto_risk_profile"
-        )
-        
-        # Preferencje strategii
-        strategy_preference = st.radio(
-            "Preferowany typ strategii",
-            ["Automatyczny wybór", "Trendowa", "Oscylacyjna", "Mieszana"],
-            key="auto_strategy_preference"
-        )
-        
-        # Uwzględnianie prowizji i spreadów
-        include_fees = st.checkbox("Uwzględnij prowizje i spready", value=True, key="auto_fees")
-    
-    # Sekcja informacyjna
-    with st.expander("Co robi tryb automatyczny?", expanded=False):
-        st.markdown("""
-        **Tryb automatyczny** analizuje dane historyczne i automatycznie:
-        
-        1. **Analizuje warunki rynkowe** (trend, zmienność) dla wybranego instrumentu
-        2. **Dobiera optymalną strategię** dopasowaną do warunków rynkowych
-        3. **Dostosowuje parametry zarządzania ryzykiem** do wybranego profilu
-        4. **Przeprowadza backtest** z optymalnymi ustawieniami
-        5. **Prezentuje uproszczone wyniki** w przystępnej formie
-        
-        W każdej chwili możesz przejść do trybu zaawansowanego, aby dostosować szczegółowe parametry.
-        """)
-    
-    # Przycisk uruchomienia
-    if st.button("Uruchom automatyczny backtest", key="auto_run_button"):
-        with st.spinner("Analizuję dane historyczne..."):
-            try:
-                # 1. Pobieranie danych historycznych
-                from src.data.historical_data_manager import HistoricalDataManager
-                from src.backtest.backtest_engine import BacktestEngine, BacktestConfig
-                from src.backtest.market_analyzer import MarketAnalyzer
-                from src.backtest.trading_strategies import (
-                    SimpleMovingAverageStrategy, 
-                    RSIStrategy, 
-                    BollingerBandsStrategy, 
-                    MACDStrategy, 
-                    CombinedIndicatorsStrategy
-                )
-                
-                # Pobierz dane historyczne
-                data_manager = HistoricalDataManager()
-                historical_data = data_manager.get_historical_data(
-                    symbol=instrument,
-                    timeframe=timeframe,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-                
-                if historical_data.empty:
-                    st.error(f"Nie udało się pobrać danych historycznych dla {instrument} ({timeframe})")
-                    return
-                
-                # 2. Analiza warunków rynkowych
-                st.info("Analizuję warunki rynkowe...")
-                market_analyzer = MarketAnalyzer()
-                market_analysis = market_analyzer.analyze_market(
-                    data=historical_data,
-                    risk_profile=risk_profile,
-                    strategy_preference=strategy_preference
-                )
-                
-                # 3. Przygotowanie konfiguracji backtestingu
-                # Ustawienie risk per trade na podstawie profilu ryzyka
-                risk_per_trade_values = {
-                    "Konserwatywny": 0.01,  # 1%
-                    "Zrównoważony": 0.02,   # 2%
-                    "Agresywny": 0.03       # 3%
-                }
-                risk_per_trade = risk_per_trade_values[risk_profile]
-                
-                backtest_config = BacktestConfig(
-                    symbol=instrument,
-                    timeframe=timeframe,
-                    start_date=start_date,
-                    end_date=end_date,
-                    initial_capital=capital,
-                    risk_per_trade=risk_per_trade,
-                    include_fees=include_fees
-                )
-                
-                # 4. Tworzenie odpowiedniej strategii z rekomendowanymi parametrami
-                strategy = None
-                if market_analysis.recommended_strategy == "SimpleMovingAverage":
-                    strategy = SimpleMovingAverageStrategy(**market_analysis.recommended_params)
-                elif market_analysis.recommended_strategy == "RSI":
-                    strategy = RSIStrategy(**market_analysis.recommended_params)
-                elif market_analysis.recommended_strategy == "BollingerBands":
-                    strategy = BollingerBandsStrategy(**market_analysis.recommended_params)
-                elif market_analysis.recommended_strategy == "MACD":
-                    strategy = MACDStrategy(**market_analysis.recommended_params)
-                elif market_analysis.recommended_strategy == "CombinedIndicators":
-                    weights = market_analysis.recommended_params.get("weights", {})
-                    thresholds = market_analysis.recommended_params.get("thresholds", {})
-                    strategy = CombinedIndicatorsStrategy(weights=weights, thresholds=thresholds)
-                
-                if not strategy:
-                    st.error("Nie udało się utworzyć strategii handlowej")
-                    return
-                
-                # 5. Uruchomienie backtestingu
-                st.info(f"Uruchamiam backtest ze strategią {market_analysis.recommended_strategy}...")
-                engine = BacktestEngine(backtest_config, strategy=strategy)
-                result = engine.run()
-                
-                # 6. Obliczenie metryk i formatowanie wyników
-                from src.backtest.metrics import calculate_metrics
-                metrics = calculate_metrics(result)
-                
-                # Formatowanie transakcji
-                trades_df = pd.DataFrame([vars(trade) for trade in result.trades])
-                if not trades_df.empty:
-                    trades_df = trades_df.drop(['strategy', 'symbol'], axis=1, errors='ignore')
-                
-                # 7. Zapisz wyniki do sesji
-                st.session_state['auto_backtest_results'] = {
-                    'net_profit': metrics['net_profit'],
-                    'total_trades': metrics['total_trades'],
-                    'win_rate': metrics['win_rate'] * 100,  # Konwersja na procenty
-                    'profit_factor': metrics['profit_factor'],
-                    'avg_profit': metrics['avg_profit'],
-                    'avg_loss': metrics['avg_loss'],
-                    'max_drawdown': metrics['max_drawdown'] * 100,  # Konwersja na procenty
-                    'sharpe_ratio': metrics['sharpe_ratio'],
-                    'equity_curve': result.equity_curve,
-                    'trades': trades_df,
-                    'drawdown_curve': result.drawdown_curve,
-                    'raw_result': result,
-                    'market_analysis': market_analysis,
-                    'config': {
-                        'symbol': instrument,
-                        'timeframe': timeframe,
-                        'start_date': start_date,
-                        'end_date': end_date,
-                        'initial_capital': capital,
-                        'risk_per_trade': risk_per_trade,
-                        'include_fees': include_fees,
-                        'strategy': market_analysis.recommended_strategy,
-                        'strategy_params': market_analysis.recommended_params
-                    }
-                }
-                
-                # 8. Wyświetl wyniki
-                _display_auto_backtest_results()
-                
-            except Exception as e:
-                st.error(f"Błąd podczas wykonywania automatycznego backtestingu: {str(e)}")
-                import traceback
-                st.error(f"Szczegóły błędu: {traceback.format_exc()}")
-
-def _display_auto_backtest_results():
-    """Wyświetla wyniki automatycznego backtestingu"""
-    if 'auto_backtest_results' not in st.session_state:
+    # Sprawdzenie, czy jesteśmy w trybie wyników i odpowiednia obsługa
+    if 'auto_backtest_mode' in st.session_state and st.session_state.auto_backtest_mode == "results":
+        _display_auto_backtest_results()
         return
     
-    results = st.session_state['auto_backtest_results']
-    market_analysis = results['market_analysis']
-    config = results['config']
+    st.subheader("Automatyczny Backtest")
     
-    # 1. Wyświetl analizę rynku i rekomendacje
-    st.success("Backtest zakończony pomyślnie!")
+    st.markdown("""
+    Ten tryb automatycznie analizuje dane historyczne, identyfikuje warunki rynkowe 
+    i dobiera optymalną strategię wraz z parametrami dostosowanymi do wybranego profilu ryzyka.
+    """)
     
-    st.subheader("Analiza rynku i rekomendacja strategii")
+    # Sekcja konfiguracji
+    st.subheader("Podstawowa konfiguracja")
     
-    # Wyświetl warunki rynkowe i rekomendowaną strategię
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Wykryte warunki rynkowe**: {market_analysis.description}")
-        st.write(f"**Rekomendowana strategia**: {config['strategy']}")
+    cols = st.columns(2)
+    
+    with cols[0]:
+        # Wybór instrumentu
+        instruments = ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD"]
+        symbol = st.selectbox("Instrument:", instruments)
         
-        # Wyświetl profil ryzyka
-        risk_profile_desc = {
-            "Konserwatywny": "Niższe ryzyko, potencjalnie niższe zyski, mniej transakcji",
-            "Zrównoważony": "Umiarkowane ryzyko, umiarkowane zyski, zbalansowana ilość transakcji",
-            "Agresywny": "Wyższe ryzyko, potencjalnie wyższe zyski, więcej transakcji"
-        }
-        st.write(f"**Profil ryzyka**: {config.get('risk_profile', 'Zrównoważony')} - {risk_profile_desc.get(config.get('risk_profile', 'Zrównoważony'), '')}")
+        # Wybór profilu ryzyka
+        risk_profile = st.selectbox(
+            "Profil ryzyka:", 
+            ["Konserwatywny", "Zrównoważony", "Agresywny"]
+        )
     
-    with col2:
-        # Wyświetl kluczowe metryki rynkowe
-        metrics_to_display = {
-            'trend_strength': ('Siła trendu', f"{market_analysis.metrics.get('trend_strength', 0):.2f}"),
-            'volatility_20d': ('Zmienność (20d)', f"{market_analysis.metrics.get('volatility_20d', 0):.2f}"),
-            'atr_relative': ('Względne ATR', f"{market_analysis.metrics.get('atr_relative', 0):.4f}"),
-            'rsi': ('RSI', f"{market_analysis.metrics.get('rsi', 0):.1f}")
-        }
+    with cols[1]:
+        # Wybór timeframe'u
+        timeframe = st.selectbox(
+            "Timeframe:", 
+            ["M5", "M15", "M30", "H1", "H4", "D1"],
+            index=1
+        )
         
-        for metric, (label, value) in metrics_to_display.items():
-            st.write(f"**{label}**: {value}")
+        # Preferencja strategii
+        strategy_preference = st.selectbox(
+            "Preferencja strategii:", 
+            ["Automatyczny wybór", "Trendowa", "Oscylacyjna", "Mieszana"]
+        )
     
-    # 2. Wyświetl parametry strategii
-    with st.expander("Parametry strategii", expanded=False):
-        st.json(config['strategy_params'])
+    # Dodajemy nową opcję - używanie parametrów z produkcyjnego systemu
+    use_main_system_params = st.checkbox(
+        "Użyj dokładnie tych samych parametrów co system produkcyjny", 
+        value=True,
+        help="Jeśli zaznaczone, backtest będzie używał dokładnie tych samych parametrów co główny system AgentMT5."
+    )
     
-    # 3. Wyświetl główne wyniki backtestingu
-    st.subheader("Wyniki backtestingu")
+    # Sekcja zarządzania ryzykiem
+    st.subheader("Zarządzanie ryzykiem")
     
-    # Metryki
-    metrics_col1, metrics_col2 = st.columns(2)
-    with metrics_col1:
-        st.metric(label="Zysk", 
-                 value=f"{results['net_profit']:.2f} USD", 
-                 delta=f"{(results['net_profit'] / config['initial_capital'] * 100):.2f}%")
-        st.metric(label="Liczba transakcji", value=f"{results['total_trades']}")
-    with metrics_col2:
-        st.metric(label="Win Rate", value=f"{results['win_rate']:.1f}%")
-        st.metric(label="Max Drawdown", value=f"{results['max_drawdown']:.2f}%", 
-                 delta=f"-{(results['max_drawdown'] / 100 * config['initial_capital']):.2f} USD", 
-                 delta_color="inverse")
+    risk_cols = st.columns(3)
     
-    # Wykres equity
-    st.subheader("Krzywa kapitału")
-    if 'equity_curve' in results:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=results['equity_curve'].index, y=results['equity_curve'].values, 
-                               mode='lines', name='Kapitał'))
-        fig.update_layout(title='Krzywa kapitału',
-                       xaxis_title='Data',
-                       yaxis_title='Kapitał (USD)')
-        st.plotly_chart(fig, use_container_width=True)
+    with risk_cols[0]:
+        initial_balance = st.number_input(
+            "Początkowy kapitał:", 
+            min_value=1000, 
+            max_value=1000000, 
+            value=10000,
+            step=1000
+        )
     
-    # Tabela transakcji
-    with st.expander("Historia transakcji", expanded=False):
-        if 'trades' in results and not results['trades'].empty:
-            st.dataframe(results['trades'])
+    with risk_cols[1]:
+        risk_per_trade = st.number_input(
+            "Ryzyko na transakcję (%):", 
+            min_value=0.1, 
+            max_value=10.0, 
+            value=2.0,
+            step=0.1
+        )
+    
+    with risk_cols[2]:
+        use_fixed_lot = st.checkbox("Użyj stałego wolumenu", value=False)
+        if use_fixed_lot:
+            lot_size = st.number_input(
+                "Wielkość lotu:", 
+                min_value=0.01, 
+                max_value=10.0, 
+                value=0.1,
+                step=0.01
+            )
         else:
-            st.write("Brak danych o transakcjach")
+            lot_size = None
     
-    # Przycisk przejścia do zaawansowanych ustawień
-    col_adv1, col_adv2 = st.columns(2)
-    with col_adv1:
-        if st.button("Przejdź do trybu zaawansowanego z tymi ustawieniami", key="goto_advanced_with_settings"):
-            # Przekaż ustawienia do trybu zaawansowanego
-            st.session_state.backtest_mode = "advanced"
-            st.session_state.load_from_auto = True
-            
-            # Przekaż parametry do trybu zaawansowanego
-            st.session_state.from_auto_params = {
-                'symbol': config['symbol'],
-                'timeframe': config['timeframe'],
-                'start_date': config['start_date'],
-                'end_date': config['end_date'],
-                'initial_capital': config['initial_capital'],
-                'risk_per_trade': config['risk_per_trade'],
-                'include_fees': config['include_fees'],
-                'strategy_type': config['strategy'],
-                'strategy_params': config['strategy_params']
-            }
-            
-            st.experimental_rerun()
+    # Sekcja daty
+    st.subheader("Zakres dat")
     
-    with col_adv2:
-        if st.button("Uruchom nowy automatyczny backtest", key="new_auto_backtest"):
-            # Wyczyść wyniki i rozpocznij nowy backtest
-            if 'auto_backtest_results' in st.session_state:
-                del st.session_state['auto_backtest_results']
-            st.experimental_rerun()
+    date_cols = st.columns(2)
+    
+    with date_cols[0]:
+        start_date = st.date_input(
+            "Data początkowa:", 
+            value=datetime.now() - timedelta(days=90)
+        )
+    
+    with date_cols[1]:
+        end_date = st.date_input(
+            "Data końcowa:", 
+            value=datetime.now()
+        )
+    
+    # Wizualizacja warunków rynkowych (przed uruchomieniem backtestingu)
+    if st.button("Analizuj warunki rynkowe"):
+        with st.spinner("Analizuję warunki rynkowe..."):
+            try:
+                market_condition = analyze_market_condition(
+                    symbol, timeframe, start_date, end_date
+                )
+                if market_condition:
+                    display_market_condition(market_condition)
+            except Exception as e:
+                st.error(f"Błąd podczas analizy warunków rynkowych: {str(e)}")
+    
+    # Uruchomienie backtestingu
+    if st.button("Uruchom automatyczny backtest"):
+        with st.spinner("Uruchamiam backtest..."):
+            try:
+                # Utworzenie konfiguracji backtestingu
+                config = {
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "initial_balance": initial_balance,
+                    "risk_per_trade": risk_per_trade / 100,  # Konwersja z % na wartość dziesiętną
+                    "use_fixed_lot": use_fixed_lot,
+                    "lot_size": lot_size if use_fixed_lot else None,
+                    "risk_profile": risk_profile,
+                    "strategy_preference": strategy_preference,
+                    "use_main_system_params": use_main_system_params  # Nowy parametr
+                }
+                
+                # Zapisanie konfiguracji w sesji
+                st.session_state.auto_backtest_config = config
+                
+                # Analiza rynku i uruchomienie backtestingu
+                with st.spinner("Analizuję warunki rynkowe i dobieram optymalną strategię..."):
+                    # Pobieranie danych historycznych
+                    historical_data = get_historical_data(
+                        symbol=config["symbol"],
+                        timeframe=config["timeframe"],
+                        start_date=config["start_date"],
+                        end_date=config["end_date"]
+                    )
+                    
+                    if historical_data is not None and not historical_data.empty:
+                        # Analiza warunków rynkowych
+                        market_analyzer = MarketAnalyzer()
+                        
+                        # Użyj nowego parametru w wywołaniu funkcji analyze_market
+                        market_analysis = market_analyzer.analyze_market(
+                            data=historical_data,
+                            risk_profile=config["risk_profile"],
+                            strategy_preference=config["strategy_preference"],
+                            use_main_system_params=config["use_main_system_params"]  # Nowy parametr
+                        )
+                        
+                        # Zapisanie analizy w sesji
+                        st.session_state.market_analysis = market_analysis
+                        
+                        # Wyświetlenie informacji o warunkach rynkowych
+                        st.subheader("Wyniki analizy rynku")
+                        st.markdown(f"**Zidentyfikowane warunki rynkowe:** {market_analysis.condition.value}")
+                        st.markdown(f"**Opis:** {market_analysis.description}")
+                        
+                        # Utworzenie i uruchomienie backtestingu
+                        with st.spinner("Uruchamiam backtest z optymalną strategią..."):
+                            strategy_name = market_analysis.recommended_strategy
+                            strategy_params = market_analysis.recommended_params
+                            
+                            st.markdown(f"**Wybrana strategia:** {strategy_name}")
+                            st.markdown("**Parametry strategii:**")
+                            
+                            # Pokazanie parametrów w czytelnym formacie
+                            if isinstance(strategy_params, dict):
+                                for key, value in strategy_params.items():
+                                    if isinstance(value, dict):
+                                        st.markdown(f"- **{key}:**")
+                                        for subkey, subvalue in value.items():
+                                            st.markdown(f"  - {subkey}: {subvalue}")
+                                    else:
+                                        st.markdown(f"- {key}: {value}")
+                            
+                            # Utworzenie strategii na podstawie analizy
+                            strategy = create_strategy_from_name(strategy_name, strategy_params)
+                            
+                            if strategy:
+                                # Konwersja dat do datetime
+                                start_datetime = datetime.combine(config["start_date"], datetime.min.time())
+                                end_datetime = datetime.combine(config["end_date"], datetime.min.time())
+                                
+                                # Konfiguracja backtestingu
+                                backtest_config = BacktestConfig(
+                                    symbol=config["symbol"],
+                                    timeframe=config["timeframe"],
+                                    start_date=start_datetime,
+                                    end_date=end_datetime,
+                                    initial_balance=config["initial_balance"],
+                                    lot_size=config["lot_size"] if config["use_fixed_lot"] else None,
+                                    risk_per_trade=config["risk_per_trade"] if not config["use_fixed_lot"] else None,
+                                    use_cache=True
+                                )
+                                
+                                # Inicjalizacja silnika backtestingu
+                                engine = BacktestEngine(backtest_config)
+                                
+                                # Uruchomienie backtestingu
+                                result = engine.run(strategy)
+                                
+                                # Zapisanie wyników w sesji
+                                st.session_state.auto_backtest_result = result
+                                
+                                # Przekierowanie do wyników
+                                st.session_state.auto_backtest_mode = "results"
+                                st.rerun()
+                            else:
+                                st.error(f"Nie udało się utworzyć strategii {strategy_name}")
+                    else:
+                        st.error("Nie udało się pobrać danych historycznych.")
+            except Exception as e:
+                handle_backtest_error(e)
 
 def analyze_market_condition(instrument, timeframe, start_date, end_date):
     """
-    Analizuje warunki rynkowe dla wybranego instrumentu i okresu.
+    Analizuje warunki rynkowe dla danego instrumentu i timeframe'u.
     
-    Funkcja-zaślepka, docelowo będzie analizować dane historyczne.
+    Returns:
+        MarketAnalysis: Wynik analizy rynku lub None w przypadku błędu
     """
-    # W przyszłości - faktyczna implementacja
-    import random
-    conditions = ["strong_trend", "moderate_trend", "ranging", "high_volatility", "low_volatility"]
-    condition = random.choice(conditions)
-    
-    metrics = {
-        "trend_strength": random.random(),
-        "volatility": random.random()
-    }
-    
-    return condition, metrics
+    try:
+        # Pobieranie danych historycznych
+        historical_data = get_historical_data(
+            symbol=instrument,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if historical_data is not None and not historical_data.empty:
+            # Analiza warunków rynkowych
+            market_analyzer = MarketAnalyzer()
+            
+            # Używamy domyślnego profilu ryzyka i preferencji strategii
+            # oraz korzystamy z parametrów systemu produkcyjnego
+            market_analysis = market_analyzer.analyze_market(
+                data=historical_data,
+                risk_profile="Zrównoważony",
+                strategy_preference="Automatyczny wybór",
+                use_main_system_params=True  # Zawsze używamy parametrów systemu produkcyjnego dla analizy warunków
+            )
+            
+            return market_analysis
+        
+        return None
+    except Exception as e:
+        st.error(f"Błąd podczas analizy warunków rynkowych: {str(e)}")
+        return None
 
 def display_market_condition(condition):
     """Zwraca przyjazny dla użytkownika opis warunków rynkowych"""

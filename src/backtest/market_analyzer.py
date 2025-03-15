@@ -38,16 +38,26 @@ class MarketAnalyzer:
     Używana głównie przez automatyczny tryb backtestingu.
     """
     
-    def __init__(self):
+    def __init__(self, use_main_system_strategy=True):
+        """
+        Inicjalizacja analizatora rynku.
+        
+        Args:
+            use_main_system_strategy: Jeśli True, zawsze używa CombinedIndicatorsStrategy jako
+                                      głównej strategii, zgodnie z produkcyjnym systemem AgentMT5.
+        """
+        self.use_main_system_strategy = use_main_system_strategy
+        
         # Mapowanie warunków rynkowych na rekomendowane strategie
+        # Uwaga: Jeśli use_main_system_strategy=True, te mapowania są używane tylko jako fallback
         self.condition_to_strategy = {
-            MarketCondition.STRONG_UPTREND: "SimpleMovingAverage",
-            MarketCondition.MODERATE_UPTREND: "SimpleMovingAverage", 
-            MarketCondition.STRONG_DOWNTREND: "SimpleMovingAverage",
-            MarketCondition.MODERATE_DOWNTREND: "SimpleMovingAverage",
-            MarketCondition.RANGING: "BollingerBands",
-            MarketCondition.HIGH_VOLATILITY: "RSI",
-            MarketCondition.LOW_VOLATILITY: "MACD"
+            MarketCondition.STRONG_UPTREND: "CombinedIndicators",
+            MarketCondition.MODERATE_UPTREND: "CombinedIndicators", 
+            MarketCondition.STRONG_DOWNTREND: "CombinedIndicators",
+            MarketCondition.MODERATE_DOWNTREND: "CombinedIndicators",
+            MarketCondition.RANGING: "CombinedIndicators",
+            MarketCondition.HIGH_VOLATILITY: "CombinedIndicators",
+            MarketCondition.LOW_VOLATILITY: "CombinedIndicators"
         }
         
         # Mapowanie warunków rynkowych na opisy dla użytkownika
@@ -61,46 +71,102 @@ class MarketAnalyzer:
             MarketCondition.LOW_VOLATILITY: "Niska zmienność - rekomendowane powolne strategie trendowe"
         }
         
+        # Bazowe parametry dla CombinedIndicatorsStrategy, zgodne z głównym systemem AgentMT5
+        self.base_combined_strategy_params = {
+            "weights": {
+                'trend': 0.25, 'macd': 0.20, 'rsi': 0.20, 'bb': 0.20, 'candle': 0.15,
+            },
+            "thresholds": {
+                'signal_minimum': 0.3
+            },
+            "rsi_period": 14,
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_signal": 9,
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "ma_fast_period": 10,
+            "ma_slow_period": 50
+        }
+        
         # Parametry strategii dla różnych warunków rynkowych
+        # Teraz wszystkie warunki używają CombinedIndicatorsStrategy, ale z różnymi parametrami
         self.strategy_params = {
             MarketCondition.STRONG_UPTREND: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.35, 'macd': 0.25, 'rsi': 0.15, 'bb': 0.15, 'candle': 0.10},
+                }),
                 "SimpleMovingAverage": {"fast_ma_period": 8, "slow_ma_period": 21},
-                "MACD": {"fast_ema": 12, "slow_ema": 26, "signal_period": 9},
             },
             MarketCondition.MODERATE_UPTREND: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.30, 'macd': 0.25, 'rsi': 0.15, 'bb': 0.15, 'candle': 0.15},
+                }),
                 "SimpleMovingAverage": {"fast_ma_period": 10, "slow_ma_period": 30},
-                "MACD": {"fast_ema": 12, "slow_ema": 26, "signal_period": 9},
             },
             MarketCondition.STRONG_DOWNTREND: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.35, 'macd': 0.25, 'rsi': 0.15, 'bb': 0.15, 'candle': 0.10},
+                }),
                 "SimpleMovingAverage": {"fast_ma_period": 8, "slow_ma_period": 21},
-                "MACD": {"fast_ema": 8, "slow_ema": 17, "signal_period": 9},
             },
             MarketCondition.MODERATE_DOWNTREND: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.30, 'macd': 0.25, 'rsi': 0.15, 'bb': 0.15, 'candle': 0.15},
+                }),
                 "SimpleMovingAverage": {"fast_ma_period": 10, "slow_ma_period": 30},
-                "MACD": {"fast_ema": 12, "slow_ema": 26, "signal_period": 9},
             },
             MarketCondition.RANGING: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.15, 'macd': 0.15, 'rsi': 0.25, 'bb': 0.30, 'candle': 0.15},
+                    "bb_std": 1.8,
+                }),
                 "BollingerBands": {"bb_period": 20, "bb_std": 2.0},
-                "RSI": {"rsi_period": 14, "oversold": 30, "overbought": 70},
             },
             MarketCondition.HIGH_VOLATILITY: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.15, 'macd': 0.30, 'rsi': 0.25, 'bb': 0.20, 'candle': 0.10},
+                    "rsi_period": 12,
+                    "thresholds": {'signal_minimum': 0.35}
+                }),
                 "RSI": {"rsi_period": 12, "oversold": 35, "overbought": 65},
-                "CombinedIndicators": {
-                    "weights": {
-                        'trend': 0.15, 'macd': 0.30, 'rsi': 0.25, 'bb': 0.20, 'candle': 0.10,
-                    },
-                    "thresholds": {
-                        'signal_minimum': 0.25
-                    }
-                },
             },
             MarketCondition.LOW_VOLATILITY: {
+                "CombinedIndicators": self._get_adjusted_combined_params({
+                    "weights": {'trend': 0.25, 'macd': 0.30, 'rsi': 0.15, 'bb': 0.20, 'candle': 0.10},
+                    "macd_fast": 16,
+                    "macd_slow": 32,
+                }),
                 "MACD": {"fast_ema": 16, "slow_ema": 32, "signal_period": 9},
-                "SimpleMovingAverage": {"fast_ma_period": 15, "slow_ma_period": 50},
             }
         }
     
-    def analyze_market(self, data: pd.DataFrame, risk_profile: str, strategy_preference: str = None) -> MarketAnalysis:
+    def _get_adjusted_combined_params(self, adjustments):
+        """
+        Zwraca parametry CombinedIndicatorsStrategy z zastosowanymi modyfikacjami.
+        
+        Args:
+            adjustments: Słownik zmian do zastosowania względem parametrów bazowych
+            
+        Returns:
+            Słownik z pełnym zestawem parametrów
+        """
+        params = self.base_combined_strategy_params.copy()
+        
+        # Aplikuj zagnieżdżone modyfikacje dla słowników takich jak weights i thresholds
+        for key, value in adjustments.items():
+            if isinstance(value, dict) and key in params and isinstance(params[key], dict):
+                # Dla zagnieżdżonych słowników, aktualizujemy tylko podane klucze
+                for subkey, subvalue in value.items():
+                    params[key][subkey] = subvalue
+            else:
+                # Dla prostych wartości, po prostu nadpisujemy
+                params[key] = value
+                
+        return params
+    
+    def analyze_market(self, data: pd.DataFrame, risk_profile: str, strategy_preference: str = None, 
+                       use_main_system_params: bool = False) -> MarketAnalysis:
         """
         Analizuje dane historyczne i określa warunki rynkowe oraz rekomenduje strategię
         
@@ -108,6 +174,7 @@ class MarketAnalyzer:
             data: DataFrame z danymi historycznymi (format OHLCV)
             risk_profile: Profil ryzyka (Konserwatywny, Zrównoważony, Agresywny)
             strategy_preference: Preferowany typ strategii (None oznacza automatyczny wybór)
+            use_main_system_params: Jeśli True, używa dokładnie tych samych parametrów co system produkcyjny
             
         Returns:
             MarketAnalysis: Wynik analizy zawierający warunki rynkowe, metryki i rekomendacje
@@ -124,13 +191,19 @@ class MarketAnalyzer:
         # Określenie dominującego warunku rynkowego
         condition = self._determine_market_condition(trend_metrics, volatility_metrics, range_metrics)
         
-        # Jeśli użytkownik ma preferencje odnośnie strategii, uwzględniamy je
-        recommended_strategy = self._get_recommended_strategy(condition, strategy_preference)
-        
-        # Dostosowanie parametrów do profilu ryzyka
-        recommended_params = self._adjust_params_for_risk_profile(
-            self.strategy_params[condition][recommended_strategy], risk_profile
-        )
+        # Jeśli używamy parametrów systemu głównego, zawsze wybieramy CombinedIndicatorsStrategy
+        # i używamy domyślnych parametrów produkcyjnych
+        if use_main_system_params:
+            recommended_strategy = "CombinedIndicators"
+            recommended_params = self.base_combined_strategy_params.copy()
+        else:
+            # W przeciwnym razie uwzględniamy preferencje użytkownika i warunki rynkowe
+            recommended_strategy = self._get_recommended_strategy(condition, strategy_preference)
+            
+            # Dostosowanie parametrów do profilu ryzyka
+            recommended_params = self._adjust_params_for_risk_profile(
+                self.strategy_params[condition][recommended_strategy], risk_profile
+            )
         
         # Łączymy wszystkie metryki
         combined_metrics = {**trend_metrics, **volatility_metrics, **range_metrics}
@@ -274,10 +347,14 @@ class MarketAnalyzer:
     def _get_recommended_strategy(self, condition: MarketCondition, strategy_preference: str = None) -> str:
         """Zwraca rekomendowaną strategię na podstawie warunku rynkowego i preferencji użytkownika"""
         
+        # Jeśli ustawiono flagę używania głównej strategii systemu, zawsze zwracamy CombinedIndicators
+        if self.use_main_system_strategy:
+            return "CombinedIndicators"
+        
         # Mapowanie preferencji użytkownika na strategie
         preference_to_strategy = {
-            "Trendowa": ["SimpleMovingAverage", "MACD"],
-            "Oscylacyjna": ["RSI", "BollingerBands"],
+            "Trendowa": ["CombinedIndicators", "SimpleMovingAverage", "MACD"],
+            "Oscylacyjna": ["CombinedIndicators", "RSI", "BollingerBands"],
             "Mieszana": ["CombinedIndicators"]
         }
         
@@ -315,7 +392,7 @@ class MarketAnalyzer:
                 adjusted_params["slow_ma_period"] = max(15, int(adjusted_params["slow_ma_period"] * 0.8))
         
         # Dla RSI
-        if "rsi_period" in adjusted_params:
+        if "rsi_period" in adjusted_params and "oversold" in adjusted_params:
             if risk_profile == "Konserwatywny":
                 # Bardziej ekstremalne poziomy dla konserwatywnego podejścia
                 adjusted_params["oversold"] = max(10, adjusted_params["oversold"] - 10)
@@ -326,7 +403,7 @@ class MarketAnalyzer:
                 adjusted_params["overbought"] = max(60, adjusted_params["overbought"] - 10)
         
         # Dla BollingerBands
-        if "bb_period" in adjusted_params:
+        if "bb_period" in adjusted_params and "bb_std" in adjusted_params:
             if risk_profile == "Konserwatywny":
                 # Szersze pasmo dla konserwatywnego podejścia
                 adjusted_params["bb_std"] = min(3.0, adjusted_params["bb_std"] + 0.5)
@@ -341,12 +418,14 @@ class MarketAnalyzer:
                 weights = adjusted_params["weights"]
                 weights['trend'] = min(0.4, weights['trend'] + 0.1)
                 weights['rsi'] = max(0.1, weights['rsi'] - 0.05)
-                adjusted_params["thresholds"]['signal_minimum'] = min(0.4, adjusted_params["thresholds"].get('signal_minimum', 0.2) + 0.1)
+                if "thresholds" in adjusted_params:
+                    adjusted_params["thresholds"]['signal_minimum'] = min(0.4, adjusted_params["thresholds"].get('signal_minimum', 0.2) + 0.1)
             elif risk_profile == "Agresywny":
                 # Większa waga dla oscylatorów dla agresywnego podejścia
                 weights = adjusted_params["weights"]
                 weights['trend'] = max(0.1, weights['trend'] - 0.05)
                 weights['rsi'] = min(0.4, weights['rsi'] + 0.1)
-                adjusted_params["thresholds"]['signal_minimum'] = max(0.1, adjusted_params["thresholds"].get('signal_minimum', 0.2) - 0.1)
+                if "thresholds" in adjusted_params:
+                    adjusted_params["thresholds"]['signal_minimum'] = max(0.1, adjusted_params["thresholds"].get('signal_minimum', 0.2) - 0.1)
         
         return adjusted_params 

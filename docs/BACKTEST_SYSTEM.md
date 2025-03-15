@@ -1,8 +1,8 @@
 # Dokumentacja Techniczna Systemu Backtestingu AgentMT5
 
 **Autor:** Zespół AgentMT5  
-**Data aktualizacji:** 14.04.2024  
-**Wersja:** 1.0
+**Data aktualizacji:** 15.04.2024  
+**Wersja:** 1.1
 
 ## Spis treści
 
@@ -23,6 +23,7 @@
 9. [Instrukcje dla użytkownika](#instrukcje-dla-użytkownika)
 10. [Plany rozwoju](#plany-rozwoju)
 11. [Tryby backtestingu](#tryby-backtestingu)
+12. [Integracja z systemem AgentMT5](#integracja-z-systemem-agentmt5)
 
 ## Wprowadzenie
 
@@ -600,6 +601,7 @@ Tryb automatyczny został zaprojektowany z myślą o użytkownikach, którzy dop
 - **Dobór optymalnej strategii** - na podstawie warunków rynkowych system rekomenduje najbardziej odpowiednią strategię
 - **Dostosowanie parametrów do profilu ryzyka** - parametry strategii są automatycznie dostosowywane na podstawie wybranego profilu ryzyka (Konserwatywny, Zrównoważony, Agresywny)
 - **Możliwość przejścia do trybu zaawansowanego** - po wykonaniu automatycznego backtestu istnieje możliwość przejścia do trybu zaawansowanego z zachowaniem dobranych parametrów
+- **Pełna integracja z systemem produkcyjnym** - opcja używania dokładnie tych samych parametrów i strategii co produkcyjny system AgentMT5
 
 #### Jak działa analiza warunków rynkowych:
 
@@ -611,11 +613,12 @@ Tryb automatyczny został zaprojektowany z myślą o użytkownikach, którzy dop
 
 | Warunki rynkowe | Rekomendowana strategia | Uzasadnienie |
 | --- | --- | --- |
-| Silny trend wzrostowy/spadkowy | SimpleMovingAverage | Najlepiej sprawdza się przy czystych trendach |
-| Umiarkowany trend | SimpleMovingAverage / MACD | Dobra równowaga między podążaniem za trendem a unikaniem szumu |
-| Konsolidacja (rynek w zakresie) | BollingerBands | Efektywnie wykorzystuje odbicia od krawędzi zakresu |
-| Wysoka zmienność | RSI | Pomaga unikać fałszywych sygnałów w zmiennych warunkach |
-| Niska zmienność | MACD | Dobrze radzi sobie z wykrywaniem niewielkich zmian impulsu cenowego |
+| Wszystkie warunki rynkowe | CombinedIndicators | Kompleksowa strategia łącząca wszystkie wskaźniki, zgodna z głównym systemem AgentMT5 |
+| Silny trend wzrostowy/spadkowy | CombinedIndicators / SimpleMovingAverage | Najlepiej sprawdza się przy czystych trendach |
+| Umiarkowany trend | CombinedIndicators / SimpleMovingAverage / MACD | Dobra równowaga między podążaniem za trendem a unikaniem szumu |
+| Konsolidacja (rynek w zakresie) | CombinedIndicators / BollingerBands | Efektywnie wykorzystuje odbicia od krawędzi zakresu |
+| Wysoka zmienność | CombinedIndicators / RSI | Pomaga unikać fałszywych sygnałów w zmiennych warunkach |
+| Niska zmienność | CombinedIndicators / MACD | Dobrze radzi sobie z wykrywaniem niewielkich zmian impulsu cenowego |
 
 ### 7.2. Tryb zaawansowany (dla ekspertów)
 
@@ -651,3 +654,51 @@ Oto zalecany przepływ pracy z systemem backtestingu AgentMT5:
    - Skonfiguruj parametry strategii zgodnie z własną wiedzą i doświadczeniem
    - Przeprowadź optymalizację dla znalezienia najlepszych parametrów
    - Wykonaj testy walk-forward dla oceny odporności strategii
+
+## 12. Integracja z systemem AgentMT5
+
+System backtestingu jest w pełni zintegrowany z głównym systemem handlowym AgentMT5, co pozwala na testowanie dokładnie tych samych strategii i parametrów, które są używane w produkcji.
+
+### 12.1 Synchronizacja strategii i parametrów
+
+System backtestingu używa domyślnie strategii `CombinedIndicatorsStrategy`, która jest dokładnym odzwierciedleniem głównego generatora sygnałów w systemie AgentMT5. Strategia ta łączy:
+
+- Analizę trendów
+- Wskaźniki MACD
+- Wskaźniki RSI
+- Wstęgi Bollingera
+- Analizę formacji świecowych
+
+Parametry strategii (wagi, okresy wskaźników, progi sygnałów) są synchronizowane z systemem produkcyjnym, co zapewnia realistyczne wyniki backtestów.
+
+### 12.2 Opcja "Użyj dokładnie tych samych parametrów co system produkcyjny"
+
+W interfejsie trybu automatycznego backtestingu dostępna jest opcja "Użyj dokładnie tych samych parametrów co system produkcyjny". Gdy ta opcja jest włączona:
+
+- System używa strategii `CombinedIndicatorsStrategy` niezależnie od wykrytych warunków rynkowych
+- Wszystkie parametry strategii (wagi wskaźników, okresy, progi) są dokładnie takie same jak w systemie produkcyjnym
+- Dostosowania związane z profilem ryzyka są wyłączone, aby zachować pełną zgodność z systemem produkcyjnym
+
+Ta opcja jest szczególnie przydatna do:
+- Weryfikacji czy strategie produkcyjne działają zgodnie z oczekiwaniami
+- Porównania wyników historycznych z przewidywanymi
+- Testowania działania systemu na różnych instrumentach i timeframe'ach
+- Identyfikacji potencjalnych problemów z głównym systemem handlowym
+
+### 12.3 Przepływ pracy zintegrowanego backtestingu
+
+Zalecany przepływ pracy przy korzystaniu z pełnej integracji:
+
+1. Uruchomienie backtestingu z opcją "Użyj dokładnie tych samych parametrów co system produkcyjny"
+2. Analiza wyników i porównanie z rzeczywistymi wynikami systemu
+3. Identyfikacja potencjalnych obszarów do poprawy
+4. Testowanie modyfikacji parametrów w trybie zaawansowanym
+5. Implementacja sprawdzonych ulepszeń w systemie produkcyjnym
+
+### 12.4 Korzyści z pełnej integracji
+
+- **Realistyczne wyniki** - backtesty dokładnie odzwierciedlają działanie systemu produkcyjnego
+- **Spójność rozwoju** - wszystkie usprawnienia są testowane przed wdrożeniem
+- **Szybsza optymalizacja** - łatwiejsza identyfikacja optymalnych parametrów
+- **Możliwość porównywania** - bezpośrednie porównanie wyników backtestów z rzeczywistymi wynikami
+- **Bezpieczeństwo** - testowanie zmian przed ich wdrożeniem w środowisku produkcyjnym
